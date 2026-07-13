@@ -34,6 +34,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -298,6 +299,9 @@ export default function Users() {
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Användardetaljer</DialogTitle>
+                        <DialogDescription>
+                            Se användarens profil och registrerade fåglar.
+                        </DialogDescription>
                     </DialogHeader>
                     {detail && (
                         <div className="space-y-4">

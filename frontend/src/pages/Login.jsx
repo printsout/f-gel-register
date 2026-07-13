@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Feather, EnvelopeSimple, LockKey, GoogleLogo, ArrowRight } from "@phosphor-icons/react";
@@ -21,10 +21,12 @@ export default function Login() {
     });
     const [busy, setBusy] = useState(false);
 
-    if (user && user.role) {
-        const to = user.role === "admin" ? "/admin" : "/";
-        navigate(to, { replace: true });
-    }
+    useEffect(() => {
+        if (user && user.role) {
+            const to = user.role === "admin" ? "/admin" : "/";
+            navigate(to, { replace: true });
+        }
+    }, [user, navigate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

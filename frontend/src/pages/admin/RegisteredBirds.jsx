@@ -26,6 +26,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -273,6 +274,9 @@ export default function RegisteredBirds() {
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Redigera fågel</DialogTitle>
+                        <DialogDescription>
+                            Ändra fågelns uppgifter eller betalstatus. Ringnummer måste vara unikt.
+                        </DialogDescription>
                     </DialogHeader>
                     {editing && (
                         <div className="space-y-4">

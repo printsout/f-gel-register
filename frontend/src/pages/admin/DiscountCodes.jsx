@@ -21,6 +21,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -231,6 +232,9 @@ export default function DiscountCodes() {
                         <DialogTitle>
                             {dialog === "new" ? "Ny rabattkod" : "Redigera kod"}
                         </DialogTitle>
+                        <DialogDescription>
+                            Rabattkoder ger procentuell rabatt på registreringsavgiften (300 kr).
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
