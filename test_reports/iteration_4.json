@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 4 - missing-birds private report feature: 23/23 new backend tests pass; 85/85 regression tests pass. Full frontend lifecycle verified end-to-end (public report → admin sees → notify → mark-found → close → delete). Privacy isolation confirmed: reports never leak into /api/found-birds, /api/posts, /api/public-birds, /galleri, or /hittade-faglar. Admin stats include missing_searching / missing_found. UI: sidebar 'Bortflögna (privat)' link positioned correctly between Registrerade fåglar and Hittade fåglar; landing hero CTA + header link both present and functional; ReportMissing form has all required data-testids including privacy-notice banner; success dialog with 'Rapporten är skickad' title works and 'Till startsidan' navigates to /.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_missing_birds.py",
+    "/app/test_reports/pytest/iteration_4_missing_birds.xml",
+    "/app/test_reports/pytest/iteration_4_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1420 lines; consider splitting into routers (auth, admin, public, posts, missing_birds) for maintainability.",
+    "MissingBirdInput does not validate last_seen_date format (accepts any string). Consider using date type or regex for ISO YYYY-MM-DD.",
+    "PATCH /admin/missing-birds does not clear found_at when status is changed back from 'found' to 'searching'; document/decide desired semantics.",
+    "notify endpoint accepts empty message (message: None) — intentional but note that UI can produce an empty notification record."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_missing_birds.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 new + 85/85 regression)",
+    "frontend": "100% (all critical flows verified: form submit, success dialog, admin tabs, notify, mark-found, close, delete, sidebar nav, privacy isolation)"
+  },
+  "seed_data_creation": "Created + deleted several TEST_-prefixed missing-bird reports during tests. All cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Missing-birds feature fully validated end-to-end. New test file /app/backend/tests/test_missing_birds.py added. Privacy confirmed by explicitly checking public endpoints do not return reports. If future iterations touch this area, re-run /app/backend/tests/test_missing_birds.py and the regression suite (backend_test.py, test_posts_moderation.py, test_gallery_and_my_birds.py) — all currently green.",
+  "test_credentials": "admin@papegojregistret.se / Admin123!, test@papegojregistret.se / Test123! (from /app/memory/test_credentials.md)"
+}

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Feather, Shield, MagnifyingGlass, ArrowRight, MapPin, SignIn } from "@phosphor-icons/react";
+import { Feather, Shield, MagnifyingGlass, ArrowRight, MapPin, SignIn, WarningCircle } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 
@@ -33,6 +33,13 @@ export default function Landing() {
                             data-testid="link-found-list"
                         >
                             Hittade fåglar
+                        </Link>
+                        <Link
+                            to="/rapportera-bortflygen"
+                            className="text-sm text-muted-foreground hover:text-foreground px-3 py-2 hidden sm:inline-block"
+                            data-testid="link-report-missing"
+                        >
+                            Bortflögen fågel
                         </Link>
                         <Link
                             to="/rapportera-hittad"
@@ -102,6 +109,22 @@ export default function Landing() {
                             </Button>
                         </Link>
                     </div>
+
+                    <Link
+                        to="/rapportera-bortflygen"
+                        className="mt-8 inline-flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 hover:border-destructive/50 hover:bg-destructive/10 transition-colors"
+                        data-testid="link-hero-report-missing"
+                    >
+                        <WarningCircle size={20} weight="duotone" className="text-destructive flex-shrink-0" />
+                        <div className="text-left">
+                            <p className="text-sm font-semibold text-destructive">
+                                Har din papegoja flugit iväg?
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                Rapportera privat till admin — de kontaktar dig när något matchar →
+                            </p>
+                        </div>
+                    </Link>
                 </div>
                 <div
                     className="relative aspect-[4/5] rounded-lg overflow-hidden hidden lg:block"

@@ -8,6 +8,7 @@ import AuthCallback from "@/pages/AuthCallback";
 import Landing from "@/pages/public/Landing";
 import RegisterBird from "@/pages/public/RegisterBird";
 import ReportFound from "@/pages/public/ReportFound";
+import ReportMissing from "@/pages/public/ReportMissing";
 import FoundBirdsList from "@/pages/public/FoundBirdsList";
 import Gallery from "@/pages/public/Gallery";
 import MyBirds from "@/pages/public/MyBirds";
@@ -21,6 +22,7 @@ import Feedback from "@/pages/admin/Feedback";
 import Comments from "@/pages/admin/Comments";
 import Activity from "@/pages/admin/Activity";
 import AdminPosts from "@/pages/admin/Posts";
+import AdminMissingBirds from "@/pages/admin/MissingBirds";
 
 function AppRoutes() {
     const location = useLocation();
@@ -34,6 +36,7 @@ function AppRoutes() {
             <Route path="/" element={<Landing />} />
             <Route path="/registrera-fagel" element={<RegisterBird />} />
             <Route path="/rapportera-hittad" element={<ReportFound />} />
+            <Route path="/rapportera-bortflygen" element={<ReportMissing />} />
             <Route path="/hittade-faglar" element={<FoundBirdsList />} />
             <Route path="/galleri" element={<Gallery />} />
             <Route path="/mina-faglar" element={<MyBirds />} />
@@ -59,6 +62,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <AdminPosts />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/missing-birds"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <AdminMissingBirds />
                     </ProtectedRoute>
                 }
             />

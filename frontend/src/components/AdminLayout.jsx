@@ -14,6 +14,7 @@ import {
     X,
     Feather,
     ImageSquare,
+    WarningCircle,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ const NAV = [
     { to: "/admin", label: "Översikt", icon: ChartLineUp, end: true },
     { to: "/admin/posts", label: "Inlägg (granskning)", icon: ImageSquare },
     { to: "/admin/registered-birds", label: "Registrerade fåglar", icon: Bird },
+    { to: "/admin/missing-birds", label: "Bortflögna (privat)", icon: WarningCircle },
     { to: "/admin/found-birds", label: "Hittade fåglar", icon: MapPin },
     { to: "/admin/users", label: "Användare", icon: UsersThree },
     { to: "/admin/discount-codes", label: "Rabattkoder", icon: TicketIcon },

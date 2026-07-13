@@ -263,6 +263,28 @@ class PostRejectInput(BaseModel):
     reason: Optional[str] = None
 
 
+class MissingBirdInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    owner_name: str = Field(min_length=1)
+    contact_phone: str
+    contact_email: Optional[EmailStr] = None
+    species: str = Field(min_length=1)
+    ring_number: Optional[str] = None
+    description: str = Field(min_length=1)
+    last_seen_location: str = Field(min_length=1)
+    last_seen_date: str
+    reward_offered: Optional[str] = None
+
+
+class MissingBirdUpdate(BaseModel):
+    status: Optional[Literal["searching", "found", "closed"]] = None
+    admin_notes: Optional[str] = None
+
+
+class MissingBirdNotify(BaseModel):
+    message: Optional[str] = None
+
+
 class UserUpdate(BaseModel):
     role: Optional[Literal["user", "admin"]] = None
     is_blocked: Optional[bool] = None
@@ -616,6 +638,109 @@ async def validate_discount_endpoint(payload: dict):
 
 
 # ----------------------------------------------------------------------------
+# Missing birds (private – only admin sees these reports)
+# ----------------------------------------------------------------------------
+@api.post("/missing-birds")
+async def report_missing_bird(data: MissingBirdInput):
+    """Public endpoint. Anyone can report their bird missing. Report is private (only admin)."""
+    if not SWEDISH_PHONE_RE.match(data.contact_phone):
+        raise HTTPException(status_code=400, detail="Ange ett giltigt svenskt telefonnummer")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "owner_name": data.owner_name,
+        "contact_phone": data.contact_phone,
+        "contact_email": data.contact_email,
+        "species": data.species,
+        "ring_number": data.ring_number,
+        "description": data.description,
+        "last_seen_location": data.last_seen_location,
+        "last_seen_date": data.last_seen_date,
+        "reward_offered": data.reward_offered,
+        "status": "searching",
+        "admin_notes": None,
+        "found_at": None,
+        "notified_at": None,
+        "notification_message": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.missing_birds.insert_one(doc)
+    await log_activity(None, data.contact_email, "missing_bird.report", doc["id"], {"species": data.species})
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/admin/missing-birds")
+async def admin_list_missing_birds(
+    _: dict = Depends(require_admin),
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    q: dict = {}
+    if status and status != "all":
+        q["status"] = status
+    if search:
+        s = re.escape(search)
+        q["$or"] = [
+            {"owner_name": {"$regex": s, "$options": "i"}},
+            {"species": {"$regex": s, "$options": "i"}},
+            {"ring_number": {"$regex": s, "$options": "i"}},
+            {"last_seen_location": {"$regex": s, "$options": "i"}},
+            {"contact_phone": {"$regex": s, "$options": "i"}},
+        ]
+    return await db.missing_birds.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+
+@api.patch("/admin/missing-birds/{report_id}")
+async def admin_update_missing_bird(report_id: str, updates: MissingBirdUpdate, admin: dict = Depends(require_admin)):
+    payload = {k: v for k, v in updates.model_dump(exclude_none=True).items()}
+    if not payload:
+        raise HTTPException(status_code=400, detail="Inget att uppdatera")
+    if payload.get("status") == "found":
+        payload["found_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.missing_birds.update_one({"id": report_id}, {"$set": payload})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Rapport hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.missing_bird.update", report_id, payload)
+    return await db.missing_birds.find_one({"id": report_id}, {"_id": 0})
+
+
+@api.post("/admin/missing-birds/{report_id}/notify")
+async def admin_notify_missing_bird(report_id: str, data: MissingBirdNotify, admin: dict = Depends(require_admin)):
+    """Record that admin has notified the reporter (usually because bird was found)."""
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.missing_birds.update_one(
+        {"id": report_id},
+        {"$set": {
+            "notified_at": now,
+            "notification_message": data.message,
+        }},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Rapport hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.missing_bird.notify", report_id, {"message": data.message})
+    return await db.missing_birds.find_one({"id": report_id}, {"_id": 0})
+
+
+@api.delete("/admin/missing-birds/{report_id}")
+async def admin_delete_missing_bird(report_id: str, admin: dict = Depends(require_admin)):
+    result = await db.missing_birds.delete_one({"id": report_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Rapport hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.missing_bird.delete", report_id)
+    return {"success": True}
+
+
+@api.get("/admin/missing-birds/export/csv")
+async def admin_export_missing_birds(_: dict = Depends(require_admin)):
+    items = await db.missing_birds.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    return _csv_stream(items, "missing_birds", [
+        "id", "owner_name", "contact_phone", "contact_email", "species",
+        "ring_number", "last_seen_location", "last_seen_date", "status",
+        "found_at", "notified_at", "created_at",
+    ])
+
+
+# ----------------------------------------------------------------------------
 # Community posts (moderated)
 # ----------------------------------------------------------------------------
 def _sanitize_post(doc: dict, include_private: bool = False) -> dict:
@@ -768,6 +893,8 @@ async def admin_stats(_: dict = Depends(require_admin)):
     total_discount = await db.discount_codes.count_documents({})
     pending_posts = await db.posts.count_documents({"status": "pending"})
     approved_posts = await db.posts.count_documents({"status": "approved"})
+    missing_searching = await db.missing_birds.count_documents({"status": "searching"})
+    missing_found = await db.missing_birds.count_documents({"status": "found"})
 
     # Revenue: sum registration_fee (final_amount if set else 300) for completed birds
     revenue_cursor = db.registered_birds.aggregate([
@@ -811,6 +938,8 @@ async def admin_stats(_: dict = Depends(require_admin)):
         "total_discount_codes": total_discount,
         "pending_posts": pending_posts,
         "approved_posts": approved_posts,
+        "missing_searching": missing_searching,
+        "missing_found": missing_found,
         "total_revenue": total_revenue,
         "registrations_series": registrations_series,
         "species_top": species_top,
@@ -1171,6 +1300,8 @@ async def startup():
     await db.posts.create_index("id", unique=True)
     await db.posts.create_index("status")
     await db.posts.create_index("user_id")
+    await db.missing_birds.create_index("id", unique=True)
+    await db.missing_birds.create_index("status")
 
     now = datetime.now(timezone.utc).isoformat()
 
