@@ -1,0 +1,107 @@
+{
+  "theme": "light",
+  "typography": {
+    "headings": {
+      "family": "Cabinet Grotesk",
+      "fallback": "sans-serif",
+      "usage": "Dashboard titles, metric numbers, modal headers",
+      "weight": "font-bold"
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "fallback": "sans-serif",
+      "usage": "Tables, labels, forms, body copy",
+      "weight": "font-normal to font-medium"
+    },
+    "scale": {
+      "h1": "text-3xl md:text-4xl tracking-tight",
+      "h2": "text-2xl md:text-3xl tracking-tight",
+      "h3": "text-xl md:text-2xl",
+      "h4": "text-lg md:text-xl",
+      "body": "text-sm",
+      "labels": "text-xs uppercase tracking-[0.2em]"
+    }
+  },
+  "colors": {
+    "archetype": "Organic & Earthy (Nordic Pine + Macaw)",
+    "primary": {
+      "hex": "#FF5C00",
+      "name": "Macaw Orange",
+      "usage": "Primary buttons, active states, key chart highlights. Represents the parrot/exotic touch."
+    },
+    "background": {
+      "page": "#F6F7F6",
+      "card": "#FFFFFF",
+      "sidebar": "#0D2B1D",
+      "sidebar_hover": "#16452F"
+    },
+    "text": {
+      "primary": "#1A1D1C",
+      "secondary": "#64748B",
+      "sidebar": "#FFFFFF",
+      "sidebar_muted": "#A1B0A8"
+    },
+    "accents": {
+      "success": "#205E42",
+      "warning": "#EAB308",
+      "danger": "#DC2626",
+      "border": "#E2E8E0"
+    }
+  },
+  "visual_enhancers": {
+    "borders": "1px solid #E2E8E0 on all cards, inputs, and tables. Flat and crisp aesthetics.",
+    "radius": "rounded-lg (8px maximum) for cards and buttons. Avoid overly pill-shaped elements for admin dense data.",
+    "surfaces": "Solid flat backgrounds. NO gradients. Use glassmorphism (backdrop-blur-md bg-white/80) ONLY for sticky headers or top nav bars.",
+    "hover_states": "Interactive cards lift slightly (-translate-y-1) with a soft shadow-md. Buttons change color to a darker shade."
+  },
+  "grids_and_layouts": {
+    "dashboard_grid": "High Density Grid. grid-cols-1 md:grid-cols-4 gap-4 or gap-6. KPIs in col-span-1, Main charts in col-span-2 or col-span-3.",
+    "spacing": "Generous internal spacing. Use p-6 inside cards. The layout must feature a fixed left sidebar (approx 260px) and 1fr content area.",
+    "sidebar": "Dark Nordic Pine sidebar. Must remain sticky. Include branding/logo at top, navigation links, and user profile block at bottom."
+  },
+  "component_instructions": {
+    "tables": "Use Shadcn Table. Grid borders style (border-collapse, border-b on rows). Add filtering/search at top left. MUST include row actions (View, Edit, Delete).",
+    "buttons": "Shadcn Button. Use Macaw Orange for primary CTA ONLY. Use outline or ghost for secondary/table actions.",
+    "cards": "Shadcn Card. Override default shadow to shadow-sm. Use sharp clear borders.",
+    "charts": "Use Recharts (or Shadcn Chart). Use Macaw Orange and Canopy Green. Add tooltip, subtle grid lines, and responsive container."
+  },
+  "motion": {
+    "page_transitions": "Subtle fade-in for page loads.",
+    "hover": "Transition transform and colors over 0.2s ease.",
+    "stagger": "Fade in list items and table rows when feasible, but prioritize immediate data render."
+  },
+  "accessibility": {
+    "contrast": "Ensure Macaw Orange text on white meets WCAG AA (use darker #CC4A00 if needed for text). White on Orange is AAA.",
+    "focus": "focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
+    "motion": "Respect prefers-reduced-motion for all UI animations."
+  },
+  "media_and_images": {
+    "login_background": {
+      "url": "https://images.unsplash.com/photo-1440581572325-0bea30075d9d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwxfHxzd2VkaXNoJTIwZm9yZXN0JTIwc3VidGxlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODM5NDQzMTZ8MA&ixlib=rb-4.1.0&q=85",
+      "usage": "Use as a full-cover background for the split-screen login page (right side). Apply a bg-black/40 overlay so it's subtle."
+    },
+    "bird_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1606383069718-104a95938112?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHw0fHxwYXJyb3QlMjBpbiUyMG5hdHVyZSUyMHBvcnRyYWl0fGVufDB8fHx8MTc4Mzk0NDMxNnww&ixlib=rb-4.1.0&q=85",
+      "usage": "Placeholder for registered bird images in the table or drawer."
+    },
+    "bird_avatar_2": {
+      "url": "https://images.unsplash.com/photo-1616902509409-a624c4f31a56?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwyfHxwYXJyb3QlMjBpbiUyMG5hdHVyZSUyMHBvcnRyYWl0fGVufDB8fHx8MTc4Mzk0NDMxNnww&ixlib=rb-4.1.0&q=85",
+      "usage": "Placeholder for found bird images."
+    }
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "instruction": "Use Duotone weight for dashboard sidebar icons. Use Regular for standard UI elements and table actions."
+  },
+  "universal_guidelines_for_main_agent": [
+    "DO NOT use purple/violet gradients (#7351B7) or generic teal (#1B93A4). Stick to the Nordic Pine + Macaw Orange theme.",
+    "Use data-testid attributes on ALL interactive elements (buttons, inputs, menu items, table rows).",
+    "Do not center-align the app container. All text and forms should flow left-aligned for data readability.",
+    "Prioritize Recharts or Shadcn Charts for KPI line charts.",
+    "Use Sonner for all toast notifications (e.g., success message on block user or delete bird).",
+    "Ensure sidebar is responsive: hidden on mobile behind a hamburger menu, 250-300px fixed width on desktop.",
+    "Do not use generic 'transition: all' in CSS. Explicitly define transition-colors, transition-transform.",
+    "All application text, headers, menus, and labels MUST be in Swedish.",
+    "Avoid overly complex 3D libraries unless strictly necessary for a chart; stick to high-performance 2D SVG/Canvas charts for the admin panel."
+  ]
+}
