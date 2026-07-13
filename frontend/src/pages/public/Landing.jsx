@@ -45,7 +45,7 @@ export default function Landing() {
                             <>
                                 <Link to="/mina-faglar">
                                     <Button size="sm" variant="outline" data-testid="button-my-birds">
-                                        Mina fåglar
+                                        Mina inlägg
                                     </Button>
                                 </Link>
                                 {isAdmin && (

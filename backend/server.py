@@ -251,6 +251,18 @@ class DiscountCodeUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class PostInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    bird_id: Optional[str] = None
+    title: str = Field(min_length=1, max_length=140)
+    content: str = Field(min_length=1, max_length=2000)
+    image_urls: List[str] = Field(default_factory=list)
+
+
+class PostRejectInput(BaseModel):
+    reason: Optional[str] = None
+
+
 class UserUpdate(BaseModel):
     role: Optional[Literal["user", "admin"]] = None
     is_blocked: Optional[bool] = None
@@ -604,6 +616,143 @@ async def validate_discount_endpoint(payload: dict):
 
 
 # ----------------------------------------------------------------------------
+# Community posts (moderated)
+# ----------------------------------------------------------------------------
+def _sanitize_post(doc: dict, include_private: bool = False) -> dict:
+    out = {k: v for k, v in doc.items() if k != "_id"}
+    if not include_private:
+        out.pop("moderated_by", None)
+        out.pop("moderated_by_email", None)
+    return out
+
+
+@api.post("/posts")
+async def create_post(data: PostInput, user: dict = Depends(get_current_user)):
+    if len(data.image_urls) > 8:
+        raise HTTPException(status_code=400, detail="Max 8 bilder per inlägg")
+
+    bird_species: Optional[str] = None
+    if data.bird_id:
+        bird = await db.registered_birds.find_one({"id": data.bird_id})
+        if not bird:
+            raise HTTPException(status_code=404, detail="Fågel hittades inte")
+        if bird.get("user_id") and bird["user_id"] != user["user_id"] and user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Du kan bara skapa inlägg för dina egna fåglar")
+        bird_species = bird.get("species")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["user_id"],
+        "author_name": f"{user.get('first_name') or ''} {user.get('last_name') or ''}".strip() or user["email"],
+        "author_email": user["email"],
+        "bird_id": data.bird_id,
+        "bird_species": bird_species,
+        "title": data.title,
+        "content": data.content,
+        "image_urls": data.image_urls,
+        "status": "pending",
+        "reject_reason": None,
+        "moderated_by": None,
+        "moderated_by_email": None,
+        "moderated_at": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.posts.insert_one(doc)
+    await log_activity(user["user_id"], user["email"], "post.create", doc["id"], {"title": data.title})
+    return _sanitize_post(doc)
+
+
+@api.get("/posts")
+async def list_public_posts(search: Optional[str] = None):
+    q: dict = {"status": "approved"}
+    if search:
+        s = re.escape(search)
+        q["$or"] = [
+            {"title": {"$regex": s, "$options": "i"}},
+            {"content": {"$regex": s, "$options": "i"}},
+            {"bird_species": {"$regex": s, "$options": "i"}},
+            {"author_name": {"$regex": s, "$options": "i"}},
+        ]
+    docs = await db.posts.find(q).sort("moderated_at", -1).to_list(500)
+    return [_sanitize_post(d) for d in docs]
+
+
+@api.get("/my-posts")
+async def list_my_posts(user: dict = Depends(get_current_user)):
+    docs = await db.posts.find({"user_id": user["user_id"]}).sort("created_at", -1).to_list(500)
+    return [_sanitize_post(d, include_private=True) for d in docs]
+
+
+@api.delete("/posts/{post_id}")
+async def delete_own_post(post_id: str, user: dict = Depends(get_current_user)):
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Inlägg hittades inte")
+    if post["user_id"] != user["user_id"] and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Du kan bara ta bort dina egna inlägg")
+    await db.posts.delete_one({"id": post_id})
+    await log_activity(user["user_id"], user["email"], "post.delete", post_id)
+    return {"success": True}
+
+
+# ---- Admin post moderation ----
+@api.get("/admin/posts")
+async def admin_list_posts(_: dict = Depends(require_admin), status: Optional[str] = None):
+    q: dict = {}
+    if status and status != "all":
+        q["status"] = status
+    docs = await db.posts.find(q).sort("created_at", -1).to_list(1000)
+    return [_sanitize_post(d, include_private=True) for d in docs]
+
+
+@api.post("/admin/posts/{post_id}/approve")
+async def admin_approve_post(post_id: str, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.posts.update_one(
+        {"id": post_id},
+        {"$set": {
+            "status": "approved",
+            "reject_reason": None,
+            "moderated_by": admin["user_id"],
+            "moderated_by_email": admin["email"],
+            "moderated_at": now,
+        }},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Inlägg hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.post.approve", post_id)
+    return {"success": True}
+
+
+@api.post("/admin/posts/{post_id}/reject")
+async def admin_reject_post(post_id: str, data: PostRejectInput, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.posts.update_one(
+        {"id": post_id},
+        {"$set": {
+            "status": "rejected",
+            "reject_reason": data.reason,
+            "moderated_by": admin["user_id"],
+            "moderated_by_email": admin["email"],
+            "moderated_at": now,
+        }},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Inlägg hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.post.reject", post_id, {"reason": data.reason})
+    return {"success": True}
+
+
+@api.delete("/admin/posts/{post_id}")
+async def admin_delete_post(post_id: str, admin: dict = Depends(require_admin)):
+    result = await db.posts.delete_one({"id": post_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Inlägg hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.post.delete", post_id)
+    return {"success": True}
+
+
+# ----------------------------------------------------------------------------
 # ADMIN endpoints
 # ----------------------------------------------------------------------------
 @api.get("/admin/stats")
@@ -617,6 +766,8 @@ async def admin_stats(_: dict = Depends(require_admin)):
     total_feedback = await db.feedback.count_documents({})
     total_comments = await db.bird_comments.count_documents({})
     total_discount = await db.discount_codes.count_documents({})
+    pending_posts = await db.posts.count_documents({"status": "pending"})
+    approved_posts = await db.posts.count_documents({"status": "approved"})
 
     # Revenue: sum registration_fee (final_amount if set else 300) for completed birds
     revenue_cursor = db.registered_birds.aggregate([
@@ -658,6 +809,8 @@ async def admin_stats(_: dict = Depends(require_admin)):
         "total_feedback": total_feedback,
         "total_comments": total_comments,
         "total_discount_codes": total_discount,
+        "pending_posts": pending_posts,
+        "approved_posts": approved_posts,
         "total_revenue": total_revenue,
         "registrations_series": registrations_series,
         "species_top": species_top,
@@ -1015,6 +1168,9 @@ async def startup():
     await db.discount_codes.create_index("code", unique=True)
     await db.discount_codes.create_index("id", unique=True)
     await db.user_sessions.create_index("session_token")
+    await db.posts.create_index("id", unique=True)
+    await db.posts.create_index("status")
+    await db.posts.create_index("user_id")
 
     now = datetime.now(timezone.utc).isoformat()
 

@@ -20,6 +20,7 @@ import DiscountCodes from "@/pages/admin/DiscountCodes";
 import Feedback from "@/pages/admin/Feedback";
 import Comments from "@/pages/admin/Comments";
 import Activity from "@/pages/admin/Activity";
+import AdminPosts from "@/pages/admin/Posts";
 
 function AppRoutes() {
     const location = useLocation();
@@ -50,6 +51,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <RegisteredBirds />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/posts"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <AdminPosts />
                     </ProtectedRoute>
                 }
             />

@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 3 tests the new community post moderation feature end-to-end. Backend: 22/22 new pytest tests for /api/posts, /api/my-posts, admin moderation (approve/reject/delete), image cap, bird ownership, admin stats — all pass. Regression: 63/63 previous tests still pass (85/85 total). Frontend: verified user create-post flow → 'Ditt inlägg är skickat!' success popup (data-testid dialog-post-success + button-close-success), post appears in /mina-faglar with 'Väntar granskning' badge, does NOT appear in anonymous /galleri. Admin /admin/posts shows tabs (Väntande/Publicerade/Avvisade/Alla), approve moves post to Publicerade and it appears in /galleri, reject with reason moves it to Avvisade tab and shows reason in user's /mina-faglar in destructive box. File upload (base64) works with preview thumbnail + remove X button. Sidebar 'Inlägg (granskning)' link with ImageSquare icon is positioned right after Översikt. Landing button-my-birds and Gallery button-my-birds-nav both correctly render 'Mina inlägg' after frontend restart (initial run showed stale bundle before restart).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_posts_moderation.py",
+    "/app/test_reports/pytest/iteration_3_posts.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1290 lines — increasingly hard to maintain. Recommend splitting into routers/ modules (auth, admin, posts, birds, discount).",
+    "In create_post, `image_urls` are stored as raw base64 data URIs in Mongo. With 8 images @ 5MB each, a single post document can exceed 40MB which will hit Mongo's 16MB BSON document limit. Consider (a) reducing max image size (b) uploading to object storage (S3/local) and storing URLs.",
+    "Reject reason is optional (PostRejectInput.reason: Optional[str] = None) — UI accepts empty. If policy is that a reason must always be shown to the user, enforce min_length=1 server-side.",
+    "GET /api/posts search regex is safe (re.escape) — good. But GET /api/admin/posts uses status query string with no whitelist; unknown status returns empty list silently (harmless, but consider validating with Literal['pending','approved','rejected','all']).",
+    "In MyBirds.jsx PostFormDialog, onCreated() is called AFTER onOpenChange(false)+setShowSuccess(true). The parent's `load()` will fire while success dialog is open — fine, but the newly-created pending post relies on this timing; if load() errors the pending post won't appear until manual refresh.",
+    "Startup event handlers are still using deprecated `@app.on_event('startup'/'shutdown')` — should migrate to lifespan.",
+    "No pagination for admin/posts, admin/registered-birds, admin/users — hard-coded to_list(1000-2000). Could become slow with growth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_posts_moderation.py (new)"
+  ],
+  "success_rate": {"backend": "100% (22/22 new, 63/63 regression = 85/85)", "frontend": "100% (all core moderation flows verified)"},
+  "test_credentials": "admin@papegojregistret.se / Admin123!  and  test@papegojregistret.se / Test123!",
+  "seed_data_creation": "Backend startup seeds unchanged. Tests created transient TEST_/UITest posts; all cleaned up post-test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New test file at /app/backend/tests/test_posts_moderation.py (22 tests using pytest-xdist LoadScope). Uses REACT_APP_BACKEND_URL env. Frontend flows: MyBirds.jsx now renders MyPosts (route /mina-faglar preserved). Success popup MUST be verified via [data-testid='dialog-post-success'] AFTER the form dialog closes. If landing/gallery buttons render stale text ('Mina fåglar' instead of 'Mina inlägg') after code edits, restart frontend via `sudo supervisorctl restart frontend` — hot reload occasionally serves stale JS bundles on the preview URL. Cleaned test posts by title-prefix ^UITest/^UIReject/^TEST from `posts` collection.",
+  "rca_of_the_issue": "N/A – no blocking bugs. Non-blocking observation: initial UI test observed 'Mina fåglar' still rendering even though source said 'Mina inlägg'; a frontend supervisor restart resolved it, so the source is correct. Cause was stale Webpack bundle served by dev server after hot-reload."
+}
