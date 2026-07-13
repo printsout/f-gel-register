@@ -10,6 +10,7 @@ import {
     Image as ImageIcon,
     Feather,
     PlusCircle,
+    ShieldCheck,
 } from "@phosphor-icons/react";
 import api, { formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -269,11 +270,27 @@ export default function Gallery() {
                     ) : (
                         <Link to="/login">
                             <Button data-testid="button-login-to-post">
-                                <PlusCircle size={16} className="mr-2" /> Logga in för att posta
+                                <PlusCircle size={16} className="mr-2" /> Skapa konto för att posta
                             </Button>
                         </Link>
                     )}
                 </div>
+
+                {!user && (
+                    <div className="surface p-4 mb-6 flex items-start gap-3 border-primary/30 bg-primary/5">
+                        <ShieldCheck size={20} weight="duotone" className="text-primary flex-shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                            <p className="font-medium">Bara registrerade medlemmar kan skapa inlägg</p>
+                            <p className="text-muted-foreground mt-0.5">
+                                <Link to="/login" className="text-primary font-medium underline-offset-2 hover:underline">
+                                    Logga in eller skapa ett konto
+                                </Link>{" "}
+                                för att dela bilder och berättelser om din papegoja.
+                                Alla inlägg granskas av admin innan publicering.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="mb-6">
                     <Input
