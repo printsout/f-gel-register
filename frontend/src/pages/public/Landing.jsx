@@ -21,6 +21,13 @@ export default function Landing() {
                     </div>
                     <nav className="flex items-center gap-1 sm:gap-3">
                         <Link
+                            to="/galleri"
+                            className="text-sm text-muted-foreground hover:text-foreground px-3 py-2"
+                            data-testid="link-gallery"
+                        >
+                            Galleri
+                        </Link>
+                        <Link
                             to="/hittade-faglar"
                             className="text-sm text-muted-foreground hover:text-foreground px-3 py-2"
                             data-testid="link-found-list"
@@ -36,6 +43,11 @@ export default function Landing() {
                         </Link>
                         {user ? (
                             <>
+                                <Link to="/mina-faglar">
+                                    <Button size="sm" variant="outline" data-testid="button-my-birds">
+                                        Mina fåglar
+                                    </Button>
+                                </Link>
                                 {isAdmin && (
                                     <Link to="/admin">
                                         <Button size="sm" data-testid="button-goto-admin">
@@ -78,8 +90,13 @@ export default function Landing() {
                                 <ArrowRight size={18} className="ml-2" />
                             </Button>
                         </Link>
+                        <Link to="/galleri">
+                            <Button size="lg" variant="outline" className="h-12 px-6" data-testid="button-hero-gallery">
+                                Se galleriet
+                            </Button>
+                        </Link>
                         <Link to="/rapportera-hittad">
-                            <Button size="lg" variant="outline" className="h-12 px-6" data-testid="button-hero-found">
+                            <Button size="lg" variant="ghost" className="h-12 px-6" data-testid="button-hero-found">
                                 <MapPin size={18} className="mr-2" />
                                 Rapportera hittad
                             </Button>

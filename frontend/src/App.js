@@ -9,6 +9,8 @@ import Landing from "@/pages/public/Landing";
 import RegisterBird from "@/pages/public/RegisterBird";
 import ReportFound from "@/pages/public/ReportFound";
 import FoundBirdsList from "@/pages/public/FoundBirdsList";
+import Gallery from "@/pages/public/Gallery";
+import MyBirds from "@/pages/public/MyBirds";
 
 import Dashboard from "@/pages/admin/Dashboard";
 import RegisteredBirds from "@/pages/admin/RegisteredBirds";
@@ -32,6 +34,8 @@ function AppRoutes() {
             <Route path="/registrera-fagel" element={<RegisterBird />} />
             <Route path="/rapportera-hittad" element={<ReportFound />} />
             <Route path="/hittade-faglar" element={<FoundBirdsList />} />
+            <Route path="/galleri" element={<Gallery />} />
+            <Route path="/mina-faglar" element={<MyBirds />} />
 
             <Route
                 path="/admin"

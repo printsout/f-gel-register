@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Bird } from "@phosphor-icons/react";
 import api, { formatApiError } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ const SPECIES = [
 
 export default function RegisterBird() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [busy, setBusy] = useState(false);
     const [form, setForm] = useState({
         species: "",
@@ -64,10 +66,13 @@ export default function RegisterBird() {
         try {
             const { accept, ...payload } = form;
             await api.post("/registered-birds", payload);
+            const dest = user ? "/mina-faglar" : "/galleri";
             toast.success(
-                "Fågel registrerad! Vi skickar dig till startsidan.",
+                user
+                    ? "Fågel registrerad! Ladda upp bilder till din fågel."
+                    : "Fågel registrerad! Se den i galleriet.",
             );
-            setTimeout(() => navigate("/"), 1200);
+            setTimeout(() => navigate(dest), 1200);
         } catch (err) {
             toast.error(formatApiError(err));
         } finally {

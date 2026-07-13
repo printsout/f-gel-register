@@ -539,11 +539,40 @@ async def create_found_bird(data: FoundBirdInput):
 
 @api.get("/public-birds")
 async def public_birds():
+    # Show all birds so owners see their post appear immediately
     cursor = db.registered_birds.find(
-        {"image_urls": {"$exists": True, "$ne": []}, "payment_status": "completed"},
+        {},
         {"_id": 0, "phone_number": 0, "user_id": 0},
     ).sort("registration_date", -1)
-    return await cursor.to_list(200)
+    return await cursor.to_list(500)
+
+
+@api.get("/my-birds")
+async def my_birds(user: dict = Depends(get_current_user)):
+    cursor = db.registered_birds.find(
+        {"user_id": user["user_id"]},
+        {"_id": 0},
+    ).sort("registration_date", -1)
+    return await cursor.to_list(500)
+
+
+@api.post("/birds/{bird_id}/images")
+async def upload_bird_images(bird_id: str, payload: dict, user: dict = Depends(get_current_user)):
+    """Update image_urls for a bird. Owner or admin only. Images are base64 data URIs."""
+    bird = await db.registered_birds.find_one({"id": bird_id})
+    if not bird:
+        raise HTTPException(status_code=404, detail="Fågel hittades inte")
+    if user["role"] != "admin" and bird.get("user_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Du kan bara ändra dina egna fåglar")
+    image_urls = payload.get("image_urls")
+    if not isinstance(image_urls, list):
+        raise HTTPException(status_code=400, detail="image_urls måste vara en lista")
+    # Simple safety cap: 8 images per bird, 5MB each (base64)
+    if len(image_urls) > 8:
+        raise HTTPException(status_code=400, detail="Max 8 bilder per fågel")
+    await db.registered_birds.update_one({"id": bird_id}, {"$set": {"image_urls": image_urls}})
+    updated = await db.registered_birds.find_one({"id": bird_id}, {"_id": 0})
+    return updated
 
 
 @api.post("/feedback")
