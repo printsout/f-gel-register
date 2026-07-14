@@ -12,6 +12,7 @@ import ReportMissing from "@/pages/public/ReportMissing";
 import FoundBirdsList from "@/pages/public/FoundBirdsList";
 import Gallery from "@/pages/public/Gallery";
 import MyBirds from "@/pages/public/MyBirds";
+import ContentPage from "@/pages/public/ContentPage";
 
 import Dashboard from "@/pages/admin/Dashboard";
 import RegisteredBirds from "@/pages/admin/RegisteredBirds";
@@ -23,6 +24,7 @@ import Comments from "@/pages/admin/Comments";
 import Activity from "@/pages/admin/Activity";
 import AdminPosts from "@/pages/admin/Posts";
 import AdminMissingBirds from "@/pages/admin/MissingBirds";
+import AdminContent from "@/pages/admin/Content";
 
 function AppRoutes() {
     const location = useLocation();
@@ -40,6 +42,7 @@ function AppRoutes() {
             <Route path="/hittade-faglar" element={<FoundBirdsList />} />
             <Route path="/galleri" element={<Gallery />} />
             <Route path="/mina-faglar" element={<MyBirds />} />
+            <Route path="/sidor/:slug" element={<ContentPage />} />
 
             <Route
                 path="/admin"
@@ -70,6 +73,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <AdminMissingBirds />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/content"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <AdminContent />
                     </ProtectedRoute>
                 }
             />

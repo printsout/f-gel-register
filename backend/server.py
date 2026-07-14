@@ -285,6 +285,20 @@ class MissingBirdNotify(BaseModel):
     message: Optional[str] = None
 
 
+class ContentPageInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    slug: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=140)
+    content: str = ""
+    is_published: bool = True
+
+
+class ContentPageUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=140)
+    content: Optional[str] = None
+    is_published: Optional[bool] = None
+
+
 class UserUpdate(BaseModel):
     role: Optional[Literal["user", "admin"]] = None
     is_blocked: Optional[bool] = None
@@ -738,6 +752,100 @@ async def admin_export_missing_birds(_: dict = Depends(require_admin)):
         "ring_number", "last_seen_location", "last_seen_date", "status",
         "found_at", "notified_at", "created_at",
     ])
+
+
+# ----------------------------------------------------------------------------
+# Content pages (CMS) – "Om oss", "Kontakt", "FAQ", policyer, etc.
+# ----------------------------------------------------------------------------
+_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def _normalize_slug(raw: str) -> str:
+    s = raw.lower().strip().lstrip("/")
+    s = re.sub(r"[åä]", "a", s)
+    s = re.sub(r"[ö]", "o", s)
+    s = re.sub(r"[^a-z0-9-]+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s
+
+
+@api.get("/content/{slug}")
+async def get_public_content(slug: str):
+    doc = await db.content_pages.find_one(
+        {"slug": _normalize_slug(slug), "is_published": True},
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Sidan hittades inte")
+    return doc
+
+
+@api.get("/content")
+async def list_public_content():
+    docs = await db.content_pages.find(
+        {"is_published": True},
+        {"_id": 0, "content": 0},
+    ).sort("title", 1).to_list(200)
+    return docs
+
+
+@api.get("/admin/content")
+async def admin_list_content(_: dict = Depends(require_admin)):
+    docs = await db.content_pages.find({}, {"_id": 0}).sort("title", 1).to_list(200)
+    return docs
+
+
+@api.get("/admin/content/{page_id}")
+async def admin_get_content(page_id: str, _: dict = Depends(require_admin)):
+    doc = await db.content_pages.find_one({"id": page_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Sidan hittades inte")
+    return doc
+
+
+@api.post("/admin/content")
+async def admin_create_content(data: ContentPageInput, admin: dict = Depends(require_admin)):
+    slug = _normalize_slug(data.slug)
+    if not slug or not _SLUG_RE.match(slug):
+        raise HTTPException(status_code=400, detail="Ogiltig slug – använd endast a-z, 0-9 och bindestreck")
+    if await db.content_pages.find_one({"slug": slug}):
+        raise HTTPException(status_code=400, detail="En sida med denna slug finns redan")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "slug": slug,
+        "title": data.title,
+        "content": data.content or "",
+        "is_published": data.is_published,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.content_pages.insert_one(doc)
+    doc.pop("_id", None)
+    await log_activity(admin["user_id"], admin["email"], "admin.content.create", slug)
+    return doc
+
+
+@api.patch("/admin/content/{page_id}")
+async def admin_update_content(page_id: str, updates: ContentPageUpdate, admin: dict = Depends(require_admin)):
+    payload = {k: v for k, v in updates.model_dump(exclude_none=True).items()}
+    if not payload:
+        raise HTTPException(status_code=400, detail="Inget att uppdatera")
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.content_pages.update_one({"id": page_id}, {"$set": payload})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Sidan hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.content.update", page_id, payload)
+    return await db.content_pages.find_one({"id": page_id}, {"_id": 0})
+
+
+@api.delete("/admin/content/{page_id}")
+async def admin_delete_content(page_id: str, admin: dict = Depends(require_admin)):
+    result = await db.content_pages.delete_one({"id": page_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Sidan hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.content.delete", page_id)
+    return {"success": True}
 
 
 # ----------------------------------------------------------------------------
@@ -1302,6 +1410,8 @@ async def startup():
     await db.posts.create_index("user_id")
     await db.missing_birds.create_index("id", unique=True)
     await db.missing_birds.create_index("status")
+    await db.content_pages.create_index("slug", unique=True)
+    await db.content_pages.create_index("id", unique=True)
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1400,6 +1510,94 @@ async def startup():
             "report_date": datetime.now(timezone.utc).date().isoformat(),
             "created_at": now,
         })
+
+    # Seed default content pages (only if collection is empty – don't overwrite edits)
+    if await db.content_pages.count_documents({}) == 0:
+        default_pages = [
+            {
+                "slug": "om-oss",
+                "title": "Om oss",
+                "content": (
+                    "# Om Papegojregistret\n\n"
+                    "Papegojregistret drivs för att hjälpa svenska papegojägare "
+                    "att återförenas med sina fåglar. Genom att registrera ditt "
+                    "ringnummer skapar du en säker koppling mellan dig och din "
+                    "fågel — så volontärer, veterinärer och grannar snabbt kan "
+                    "kontakta dig om något händer."
+                ),
+            },
+            {
+                "slug": "kontakt",
+                "title": "Kontakt",
+                "content": (
+                    "## Kontakta oss\n\n"
+                    "**E-post:** info@papegojregistret.se\n\n"
+                    "**Telefon:** 0768 48 80 91\n\n"
+                    "**Post:** Papegojregistret, Box 1234, 200 15 Malmö"
+                ),
+            },
+            {
+                "slug": "faq",
+                "title": "FAQ",
+                "content": (
+                    "## Vanliga frågor\n\n"
+                    "**Vad kostar det att registrera?**\n"
+                    "300 kr engångsavgift + 100 kr per år.\n\n"
+                    "**Måste fågeln ha ringmärkning?**\n"
+                    "Ja, ringnumret är det som gör återförening möjligt.\n\n"
+                    "**Vem ser mina uppgifter?**\n"
+                    "Endast admin och den som hittar din fågel via ringnumret."
+                ),
+            },
+            {
+                "slug": "kopvillkor",
+                "title": "Köpvillkor",
+                "content": (
+                    "## Köpvillkor\n\n"
+                    "Registrering är en tjänst. Genom att slutföra en beställning "
+                    "godkänner du dessa villkor. Priser inkluderar moms. Betalning "
+                    "sker via Stripe."
+                ),
+            },
+            {
+                "slug": "returer",
+                "title": "Returer och återbetalningspolicyn",
+                "content": (
+                    "## Returer och återbetalning\n\n"
+                    "Registreringen kan avbrytas inom 14 dagar från betalning för "
+                    "full återbetalning. Kontakta info@papegojregistret.se."
+                ),
+            },
+            {
+                "slug": "frakt-leverans",
+                "title": "Frakt & Leverans",
+                "content": (
+                    "## Frakt & Leverans\n\n"
+                    "Papegojregistret är en digital tjänst — ingen fysisk leverans "
+                    "krävs. Din registrering aktiveras omedelbart efter betalning."
+                ),
+            },
+            {
+                "slug": "integritetspolicy",
+                "title": "Integritetspolicy",
+                "content": (
+                    "## Integritetspolicy\n\n"
+                    "Vi behandlar dina personuppgifter enligt GDPR. Uppgifter "
+                    "som samlas in: namn, telefonnummer, e-post och ringnummer. "
+                    "Uppgifterna delas aldrig med tredje part utan ditt samtycke."
+                ),
+            },
+        ]
+        for i, p in enumerate(default_pages):
+            await db.content_pages.insert_one({
+                "id": str(uuid.uuid4()),
+                "slug": p["slug"],
+                "title": p["title"],
+                "content": p["content"],
+                "is_published": True,
+                "created_at": now,
+                "updated_at": now,
+            })
 
 
 @app.on_event("shutdown")

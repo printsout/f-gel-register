@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 5 - CMS 'Innehåll' feature: 22/22 new backend tests pass; all 7 seeded pages verified (om-oss, kontakt, faq, kopvillkor, returer, frakt-leverans, integritetspolicy). Public list excludes body, public detail 404s for unpublished/missing, slug is normalised on create (åä→a, ö→o, spaces & underscores→dash, deduped), duplicate slug returns 400, PATCH cannot change slug, DELETE requires admin. Frontend admin CMS page renders exactly as designed: header 'Innehåll', subtitle, 'Sidor (7)' section with file/globe icons + publish switch + view/edit/delete buttons; Ny sida dialog derives slug from title, char counter present; Edit dialog disables slug field; publish toggle immediately hides page from public route; delete confirm dialog works. Public /sidor/om-oss renders Markdown H1 + paragraph + updated_at footer. 404 page shown for /sidor/nonexistent. Landing footer shows all 7 links. Sidebar has 'Innehåll' with FileText icon between Rabattkoder (idx 6) and Kommentarer (idx 8). Regression on /admin, /admin/missing-birds, /admin/posts passes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/admin/content/{id}", "issue": "Accepts a 'slug' field in body but silently ignores it (no error, no change). Could be clearer to 400 or omit from schema — currently relies on ContentPageUpdate not declaring the field so extra keys are just dropped."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_content_pages.py",
+    "/app/test_reports/pytest/iteration_5_content.xml",
+    "/app/test_reports/pytest/iteration_5_all.xml"
+  ],
+  "action_items": [
+    "IMPORTANT: The dev-server hot-reload had gone stale before this test run — the compiled bundle was missing the Landing.jsx footer-link grid until I ran 'sudo supervisorctl restart frontend'. Verified after restart. Not a code bug but flag for future runs: after landing changes, a manual restart may be needed if the bundle isn't up to date.",
+    "Pre-existing (unrelated) flaky failure in test_posts_moderation.py::TestAdminModeration::test_admin_delete_post — POST /api/posts returned no 'id' during test_admin_delete_post, likely because the shared test user hit some rate limit / block after many prior TEST_ posts across suites. Iteration 4 reported 100% pass on this suite; the failure was not observed on isolated re-runs but appears when running the full suite together. Not caused by CMS changes."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1620 lines. Consider splitting per-domain routers (auth, admin, posts, missing_birds, content) for maintainability.",
+    "ContentPageInput.slug is required, but the admin can effectively omit it since the frontend derives it from title. Consider making it Optional[str] and deriving server-side too so the API is fully self-contained.",
+    "PATCH /admin/content silently ignores unknown fields (e.g. 'slug'). Consider explicit `model_config = ConfigDict(extra='forbid')` on ContentPageUpdate to fail-fast on typos.",
+    "log_activity in admin_create_content passes 'slug' as target_id, but for update/delete it uses page_id (UUID). Inconsistent identifier choice makes the activity log harder to correlate.",
+    "The seed loop is O(N) inserts (7). Could use insert_many for a tiny efficiency gain.",
+    "Minimal Markdown renderer in ContentPage.jsx is safe (HTML-escapes first) but only supports headings/bold/italic/links/lists — no images, tables, or code blocks. Fine for the current CMS scope; document the supported subset in admin UI hint (already partially done)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_content_pages.py (NEW)"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 new content tests + 109/110 total across all suites; the 1 failure is a pre-existing unrelated posts test)",
+    "frontend": "100% (all 7 seeded pages listed, admin CRUD dialog + slug auto-derivation + slug disabled on edit + publish toggle hiding + delete confirm + public Markdown render + 404 page + landing footer grid + sidebar ordering all verified end-to-end)"
+  },
+  "test_credentials": "admin@papegojregistret.se / Admin123! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "During tests I created several TEST_-prefixed content pages and deleted them all via teardown fixture and via UI. Verified with 'Sidor (7)' returning to 7 after cleanup. Also created and deleted 'TEST Åtta öar' via UI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "CMS feature fully validated. All 7 seeded pages present with correct slugs. Backend: /app/backend/tests/test_content_pages.py — 22 tests, all pass; also passes with the other 3 backend suites (109/110 combined, 1 pre-existing flaky posts test). Frontend: admin /admin/content and public /sidor/:slug are fully wired. IMPORTANT tip for next iteration: if bundle appears stale (e.g. Landing.jsx changes not visible), do 'sudo supervisorctl restart frontend' — CRA hot-reload occasionally misses changes to Landing during rapid iterations. Also note: PATCH /admin/content ignores unknown 'slug' key rather than 400ing — see minor issues above."
+}

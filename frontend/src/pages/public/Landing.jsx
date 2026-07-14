@@ -1,10 +1,16 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Feather, Shield, MagnifyingGlass, ArrowRight, MapPin, SignIn, WarningCircle } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+import api from "@/lib/api";
 
 export default function Landing() {
     const { user, isAdmin } = useAuth();
+    const [pages, setPages] = useState([]);
+    useEffect(() => {
+        api.get("/content").then(({ data }) => setPages(data)).catch(() => {});
+    }, []);
     return (
         <div className="min-h-screen bg-background">
             {/* Top bar */}
@@ -176,14 +182,30 @@ export default function Landing() {
                 ))}
             </section>
 
-            <footer className="border-t border-border py-8">
-                <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <p className="text-xs text-muted-foreground">
-                        © {new Date().getFullYear()} Papegojregistret
-                    </p>
-                    <div className="flex gap-4 text-xs text-muted-foreground">
-                        <a href="mailto:info@papegojregistret.se">info@papegojregistret.se</a>
-                        <span>0768 48 80 91</span>
+            <footer className="border-t border-border py-10 bg-card">
+                <div className="max-w-6xl mx-auto px-6">
+                    {pages.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-8">
+                            {pages.map((p) => (
+                                <Link
+                                    key={p.id}
+                                    to={`/sidor/${p.slug}`}
+                                    className="text-sm text-muted-foreground hover:text-foreground"
+                                    data-testid={`footer-link-${p.slug}`}
+                                >
+                                    {p.title}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
+                        <p className="text-xs text-muted-foreground">
+                            © {new Date().getFullYear()} Papegojregistret
+                        </p>
+                        <div className="flex gap-4 text-xs text-muted-foreground">
+                            <a href="mailto:info@papegojregistret.se">info@papegojregistret.se</a>
+                            <span>0768 48 80 91</span>
+                        </div>
                     </div>
                 </div>
             </footer>
