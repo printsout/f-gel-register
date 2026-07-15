@@ -58,6 +58,13 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ Landing page now fully dynamic — reads sections from `/api/homepage`, respects order and visibility.
 - ✅ Shared `PublicFooter` component now on all 8 public pages, with links to all 7 published content pages.
 
+## Iteration 7 (2026-02-13): Dropdown navigation menu
+- ✅ `menu_items` collection with parent/child (single-level) hierarchy.
+- ✅ Admin `/admin/menu` — full CRUD tree editor with up/down reorder, eye/hide, edit, delete (cascade), "Lägg till rullgardin-val" under each top.
+- ✅ Seeded 3 top-level items (Registrera, Rapportera, Community) + 8 dropdown children.
+- ✅ New `PublicHeader` component with shadcn DropdownMenu — renders top-nav dynamically from `/api/menu` on Landing. Mobile bar uses the same dropdowns.
+- ✅ 19/19 backend tests + admin/public flows all green.
+
 ## Backlog (P0/P1/P2)
 ### P1
 - **Stripe integration** for registration payments (only structure in DB; needs Stripe keys from user).

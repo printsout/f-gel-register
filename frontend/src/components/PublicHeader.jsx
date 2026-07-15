@@ -130,12 +130,19 @@ export default function PublicHeader() {
                 </div>
             </div>
 
-            {/* Mobile menu */}
-            <div className="md:hidden border-t border-border overflow-x-auto">
-                <div className="flex gap-1 px-4 py-2">
-                    {menu.map((item) => (
-                        <TopLink key={item.id} item={item.url && item.url !== "#" ? item : { ...item, url: item.children?.[0]?.url || "#" }} />
-                    ))}
+            {/* Mobile menu — same dropdowns, more compact */}
+            <div
+                className="md:hidden border-t border-border overflow-x-auto"
+                data-testid="mobile-nav-bar"
+            >
+                <div className="flex gap-1 px-4 py-2 min-w-max">
+                    {menu.map((item) =>
+                        (item.children || []).length > 0 ? (
+                            <TopWithDropdown key={`m-${item.id}`} item={item} />
+                        ) : (
+                            <TopLink key={`m-${item.id}`} item={item} />
+                        ),
+                    )}
                 </div>
             </div>
         </header>
