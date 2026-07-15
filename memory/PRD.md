@@ -30,17 +30,33 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ JWT email/password auth with bcrypt, seeded admin + test user.
 - ✅ Emergent Google Social Login endpoint.
 - ✅ Admin dashboard: 8 KPIs, 30-day registration area chart, top-8 species bar chart.
-- ✅ Registered Birds: table + search + status filter + edit dialog + delete + CSV export.
-- ✅ Found Birds: table + search + delete + CSV export.
-- ✅ Users: table + search + role/status filters + block/unblock + delete + role change + detail dialog (with birds list).
-- ✅ Discount codes: full CRUD + active toggle + usage tracking.
-- ✅ Feedback: card view + delete + CSV export + average rating.
-- ✅ Comments: moderation list + delete.
-- ✅ Activity log with Swedish action labels.
-- ✅ Public: landing, register bird form (Swedish species select, phone validation, discount code field), report found form, found list.
-- ✅ Blocked user gate at login + on every authenticated request.
-- ✅ Full Swedish UI throughout.
-- ✅ 43/43 backend tests passing; all admin frontend flows verified.
+- ✅ Registered Birds CRUD, Found Birds moderation, Users management, Discount codes, Feedback, Comments, Activity log, CSV exports.
+
+## Iteration 2 (2026-02-13): Community gallery + My birds
+- ✅ Public `/galleri` with post-cards + inline comments.
+- ✅ `/mina-faglar` with per-bird image upload (base64 in MongoDB).
+
+## Iteration 3 (2026-02-13): Moderated community posts
+- ✅ Post model with pending/approved/rejected + admin queue.
+- ✅ Public gallery only shows approved posts; owner sees own posts with status badges.
+- ✅ Admin `/admin/posts` with Godkänn/Avvisa (+reject reason).
+
+## Iteration 4 (2026-02-13): Private missing-bird reports
+- ✅ `/rapportera-bortflygen` (public form, private submissions).
+- ✅ Admin `/admin/missing-birds` with status tabs (Sökes/Hittade/Avslutade), "Meddela ägare" flow, CSV export.
+- ✅ Privacy verified: never leaks to any public endpoint.
+
+## Iteration 5 (2026-02-13): CMS content pages
+- ✅ 7 seeded pages (Om oss, Kontakt, FAQ, Köpvillkor, Returer, Frakt & Leverans, Integritetspolicy).
+- ✅ Admin `/admin/content` full CRUD with slug normalization + publish toggle.
+- ✅ Public `/sidor/:slug` with Markdown renderer.
+
+## Iteration 6 (2026-02-13): Homepage Builder + PublicFooter everywhere
+- ✅ Admin `/admin/homepage` — drag-to-reorder sections (up/down arrows), eye-toggle visibility, duplicate, delete, add new (hero/emergency_cta/features/text_block/cta_banner types).
+- ✅ Hero editor: eyebrow, title, highlighted-word (rendered in orange), body, 3 CTA buttons, image URL.
+- ✅ Features editor: N cards with icon + title + text.
+- ✅ Landing page now fully dynamic — reads sections from `/api/homepage`, respects order and visibility.
+- ✅ Shared `PublicFooter` component now on all 8 public pages, with links to all 7 published content pages.
 
 ## Backlog (P0/P1/P2)
 ### P1

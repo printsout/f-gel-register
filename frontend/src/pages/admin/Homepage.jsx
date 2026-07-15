@@ -80,14 +80,14 @@ function SectionListItem({ section, index, total, active, onSelect, onToggleVisi
                     className={active ? "text-primary" : "text-muted-foreground"}
                 />
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate flex items-center gap-2">
+                    <div className="text-sm font-medium truncate flex items-center gap-2">
                         {section.label}
                         {!section.is_visible && (
                             <Badge variant="outline" className="text-[10px] bg-muted">
                                 Dold
                             </Badge>
                         )}
-                    </p>
+                    </div>
                     {section.subtitle && (
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                             {section.subtitle}
