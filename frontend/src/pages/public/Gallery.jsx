@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
+import PublicFooter from "@/components/PublicFooter";
 
 function formatDate(d) {
     if (!d) return "";
@@ -316,6 +317,7 @@ export default function Gallery() {
                     {posts.map((p) => <PostCard key={p.id} post={p} />)}
                 </div>
             </div>
+            <PublicFooter />
         </div>
     );
 }

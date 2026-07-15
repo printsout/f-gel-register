@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, MapPin, MagnifyingGlass } from "@phosphor-icons/react";
 import api from "@/lib/api";
 import { Input } from "@/components/ui/input";
+import PublicFooter from "@/components/PublicFooter";
 
 export default function FoundBirdsList() {
     const [items, setItems] = useState([]);
@@ -112,6 +113,7 @@ export default function FoundBirdsList() {
                     </ul>
                 )}
             </div>
+            <PublicFooter />
         </div>
     );
 }

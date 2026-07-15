@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Feather } from "@phosphor-icons/react";
 import api from "@/lib/api";
+import PublicFooter from "@/components/PublicFooter";
 
 // Simple, safe Markdown renderer for our CMS content.
 // Supports: # / ## / ### headings, **bold**, *italic*, [link](url),
@@ -167,6 +168,7 @@ export default function ContentPage() {
                     </>
                 )}
             </article>
+            <PublicFooter />
         </div>
     );
 }

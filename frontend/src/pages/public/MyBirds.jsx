@@ -17,6 +17,7 @@ import {
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/ProtectedRoute";
+import PublicFooter from "@/components/PublicFooter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -514,6 +515,7 @@ export default function MyPosts() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            <PublicFooter />
         </div>
     );
 }

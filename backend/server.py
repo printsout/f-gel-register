@@ -299,6 +299,28 @@ class ContentPageUpdate(BaseModel):
     is_published: Optional[bool] = None
 
 
+class HomepageSectionInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="allow")
+    type: Literal["hero", "features", "emergency_cta", "text_block", "cta_banner"]
+    label: str = Field(min_length=1, max_length=80)
+    subtitle: Optional[str] = None
+    is_visible: bool = True
+    config: dict = Field(default_factory=dict)
+
+
+class HomepageSectionUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="allow")
+    label: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    subtitle: Optional[str] = None
+    is_visible: Optional[bool] = None
+    config: Optional[dict] = None
+    sort_order: Optional[int] = None
+
+
+class HomepageReorder(BaseModel):
+    ids: List[str]
+
+
 class UserUpdate(BaseModel):
     role: Optional[Literal["user", "admin"]] = None
     is_blocked: Optional[bool] = None
@@ -845,6 +867,95 @@ async def admin_delete_content(page_id: str, admin: dict = Depends(require_admin
     if not result.deleted_count:
         raise HTTPException(status_code=404, detail="Sidan hittades inte")
     await log_activity(admin["user_id"], admin["email"], "admin.content.delete", page_id)
+    return {"success": True}
+
+
+# ----------------------------------------------------------------------------
+# Homepage builder (drag-to-reorder sections)
+# ----------------------------------------------------------------------------
+@api.get("/homepage")
+async def get_public_homepage():
+    docs = await db.homepage_sections.find(
+        {"is_visible": True},
+        {"_id": 0},
+    ).sort("sort_order", 1).to_list(100)
+    return docs
+
+
+@api.get("/admin/homepage")
+async def admin_list_homepage(_: dict = Depends(require_admin)):
+    return await db.homepage_sections.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+
+
+@api.post("/admin/homepage")
+async def admin_create_section(data: HomepageSectionInput, admin: dict = Depends(require_admin)):
+    # Place new section at the end
+    last = await db.homepage_sections.find_one({}, {"sort_order": 1}, sort=[("sort_order", -1)])
+    next_order = (last.get("sort_order", 0) + 1) if last else 0
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "type": data.type,
+        "label": data.label,
+        "subtitle": data.subtitle,
+        "is_visible": data.is_visible,
+        "config": data.config or {},
+        "sort_order": next_order,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.homepage_sections.insert_one(doc)
+    doc.pop("_id", None)
+    await log_activity(admin["user_id"], admin["email"], "admin.homepage.create", doc["id"])
+    return doc
+
+
+@api.patch("/admin/homepage/{section_id}")
+async def admin_update_section(section_id: str, updates: HomepageSectionUpdate, admin: dict = Depends(require_admin)):
+    payload = {k: v for k, v in updates.model_dump(exclude_none=True).items()}
+    if not payload:
+        raise HTTPException(status_code=400, detail="Inget att uppdatera")
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.homepage_sections.update_one({"id": section_id}, {"$set": payload})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Sektion hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.homepage.update", section_id)
+    return await db.homepage_sections.find_one({"id": section_id}, {"_id": 0})
+
+
+@api.post("/admin/homepage/reorder")
+async def admin_reorder_sections(data: HomepageReorder, admin: dict = Depends(require_admin)):
+    for idx, section_id in enumerate(data.ids):
+        await db.homepage_sections.update_one(
+            {"id": section_id},
+            {"$set": {"sort_order": idx, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    await log_activity(admin["user_id"], admin["email"], "admin.homepage.reorder", "*", {"count": len(data.ids)})
+    return {"success": True}
+
+
+@api.post("/admin/homepage/{section_id}/duplicate")
+async def admin_duplicate_section(section_id: str, admin: dict = Depends(require_admin)):
+    src = await db.homepage_sections.find_one({"id": section_id})
+    if not src:
+        raise HTTPException(status_code=404, detail="Sektion hittades inte")
+    last = await db.homepage_sections.find_one({}, {"sort_order": 1}, sort=[("sort_order", -1)])
+    next_order = (last.get("sort_order", 0) + 1) if last else 0
+    now = datetime.now(timezone.utc).isoformat()
+    copy = {**src, "id": str(uuid.uuid4()), "label": f"{src['label']} (kopia)", "sort_order": next_order, "created_at": now, "updated_at": now}
+    copy.pop("_id", None)
+    await db.homepage_sections.insert_one(copy)
+    copy.pop("_id", None)
+    await log_activity(admin["user_id"], admin["email"], "admin.homepage.duplicate", copy["id"])
+    return copy
+
+
+@api.delete("/admin/homepage/{section_id}")
+async def admin_delete_section(section_id: str, admin: dict = Depends(require_admin)):
+    result = await db.homepage_sections.delete_one({"id": section_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Sektion hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.homepage.delete", section_id)
     return {"success": True}
 
 
@@ -1412,6 +1523,8 @@ async def startup():
     await db.missing_birds.create_index("status")
     await db.content_pages.create_index("slug", unique=True)
     await db.content_pages.create_index("id", unique=True)
+    await db.homepage_sections.create_index("id", unique=True)
+    await db.homepage_sections.create_index("sort_order")
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1595,6 +1708,75 @@ async def startup():
                 "title": p["title"],
                 "content": p["content"],
                 "is_published": True,
+                "created_at": now,
+                "updated_at": now,
+            })
+
+    # Seed default homepage sections (only if empty)
+    if await db.homepage_sections.count_documents({}) == 0:
+        default_sections = [
+            {
+                "type": "hero",
+                "label": "Hero (huvudsektion)",
+                "subtitle": "Skapa unika produkter med dina bilder",
+                "config": {
+                    "eyebrow": "Sveriges papegojregister",
+                    "title": "Ringnummer. Återförening. Papegojregistret.",
+                    "highlighted_word": "Papegojregistret",
+                    "body": "Registrera din papegoja med ringnummer och gör det möjligt för volontärer att återförena er om fågeln försvinner.",
+                    "cta_primary_label": "Registrera fågel",
+                    "cta_primary_link": "/registrera-fagel",
+                    "cta_secondary_label": "Se galleriet",
+                    "cta_secondary_link": "/galleri",
+                    "cta_tertiary_label": "Rapportera hittad",
+                    "cta_tertiary_link": "/rapportera-hittad",
+                    "image_url": "https://images.unsplash.com/photo-1606383069718-104a95938112?crop=entropy&cs=srgb&fm=jpg&q=85",
+                },
+            },
+            {
+                "type": "emergency_cta",
+                "label": "Bortflögen fågel (nöd-CTA)",
+                "subtitle": "Har din papegoja flugit iväg?",
+                "config": {
+                    "title": "Har din papegoja flugit iväg?",
+                    "body": "Rapportera privat till admin — de kontaktar dig när något matchar",
+                    "link_label": "Rapportera",
+                    "link_url": "/rapportera-bortflygen",
+                    "tone": "destructive",
+                },
+            },
+            {
+                "type": "features",
+                "label": "Fördelar (3 kort)",
+                "subtitle": "Så här funkar det",
+                "config": {
+                    "items": [
+                        {"icon": "shield", "title": "Säker registrering", "text": "Ringnummer, ägaruppgifter och kontaktinfo lagras enligt GDPR."},
+                        {"icon": "magnifying-glass", "title": "Rapportera fynd", "text": "Hittad papegoja? Rapportera på 30 sekunder — utan konto."},
+                        {"icon": "feather", "title": "Enkel avgift", "text": "300 kr per fågel + 100 kr/år för hela flocken. Ingen krångel."},
+                    ],
+                },
+            },
+            {
+                "type": "text_block",
+                "label": "Textblock (Om registret)",
+                "subtitle": "En kort intro",
+                "is_visible": False,
+                "config": {
+                    "title": "Skydd genom gemenskap",
+                    "content": "Papegojregistret finns för att skapa en snabb koppling mellan ringnummer och ägare — så att en försvunnen fågel snabbt kan återförenas med sitt hem.",
+                },
+            },
+        ]
+        for i, s in enumerate(default_sections):
+            await db.homepage_sections.insert_one({
+                "id": str(uuid.uuid4()),
+                "type": s["type"],
+                "label": s["label"],
+                "subtitle": s.get("subtitle"),
+                "is_visible": s.get("is_visible", True),
+                "config": s["config"],
+                "sort_order": i,
                 "created_at": now,
                 "updated_at": now,
             })

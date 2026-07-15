@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 6 - Homepage Builder + PublicFooter feature: 26/26 new backend tests pass on /app/backend/tests/test_homepage.py. All 4 seeded sections verified (hero, emergency_cta, features visible; text_block hidden). Full CRUD tested: create with valid types + 422 for invalid, patch (label/subtitle/is_visible/config-arbitrary-dict), reorder re-numbers sort_order 0..N-1 and public GET reflects new order, duplicate suffixes '(kopia)' and places at end, delete + 404 for missing, non-admin gets 403 on all admin endpoints. Privacy verified: hidden section excluded from /api/homepage but present in /api/admin/homepage. Frontend admin /admin/homepage: 2-column layout works — Sektioner (N) list with icons/numbers/action buttons; add-section dialog defaults type=hero and accepts label; auto-selects newly-added section; label edit + save shows 'Spara ändringar' → 'Sparat'; eye toggle immediately updates 'Dold' badge; duplicate produces '(kopia)' suffix; move-up/down reorders in UI; delete confirm dialog + section removed. Public / renders 3 visible sections in order, hero highlighted_word 'Papegojregistret' is wrapped in <span class='text-primary'> (orange), 3 feature cards + emergency CTA present, hidden text_block NOT rendered. PublicFooter appears on ALL 8 public pages (/, /galleri, /hittade-faglar, /registrera-fagel, /rapportera-hittad, /rapportera-bortflygen, /sidor/om-oss) — footer-links-grid always has 7 links. Sidebar has 'Startsida-byggare' with Layout icon between 'Översikt' and 'Inlägg (granskning)'. Regression: /admin, /admin/content, /admin/posts all load without errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/homepage", "issue": "Returns 403 (not 401) for fully anonymous requests. Consistent with rest of codebase but semantically should be 401 for unauthenticated vs 403 for authenticated-but-not-authorized."},
+      {"endpoint": "POST /api/admin/homepage & HomepageSectionUpdate models", "issue": "Both Pydantic models have extra='allow' — unknown/typo'd fields will silently pass through into the config or be stored. Consider extra='forbid' for the top-level models (config already is a free-form dict for legit extension)."},
+      {"endpoint": "PATCH /api/admin/homepage/{id}", "issue": "config is replaced wholesale (dict is set directly). If a user PATCHes with only a subset of config keys, unlisted keys are LOST. Frontend Homepage.jsx works around this by keeping full config in local state, but this is a footgun for API consumers. Consider $set-per-key or documenting the replace-behavior."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Homepage.jsx SectionListItem", "issue": "React hydration warning: 'In HTML, <div> cannot be a descendant of <p>'. The 'Dold' Badge (a <div>) is rendered inside the <p className='text-sm font-medium truncate flex items-center gap-2'> label element (line ~83). Change the <p> to a <span> or <div> to remove the console warning.", "selector": "[data-testid^='section-item-'] p", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_homepage.py",
+    "/app/test_reports/pytest/iteration_6_homepage.xml",
+    "/app/test_reports/pytest/iteration_6_all.xml"
+  ],
+  "action_items": [
+    "LOW: Fix Homepage.jsx: change the <p> wrapping section.label + Badge to a <span> or <div> to remove the hydration warning (Badge component renders a <div>, cannot be inside <p>).",
+    "Optional: Document/tighten PATCH /api/admin/homepage/{id} config-replace semantics — it wholesale-overwrites the config dict; if a partial config comes in, unlisted keys are dropped.",
+    "Optional: Set extra='forbid' on HomepageSectionInput/HomepageSectionUpdate top-level fields (keep config as free-form dict) to fail fast on typos.",
+    "Pre-existing (unrelated) test-env flakiness: the 'test@papegojregistret.se' account has been blocked ('Kontot är blockerat') by brute-force protection when running the full backend test suite in parallel — causing 5 setup errors in test_gallery_and_my_birds.py::TestBirdComments and 1 flaky failure in test_missing_birds.py (stats counter). These are NOT related to the homepage feature. Consider adding a fixture to unblock the test user before test runs, or increase the lockout threshold in the test env."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1802 lines (up from 1620) — high urgency to split into per-domain routers (auth, admin, posts, missing_birds, content, homepage). Single-file server has become the biggest maintainability risk.",
+    "Homepage.jsx (629 lines) is a full-editor SPA in one file; consider extracting SectionListItem, ConfigField, and per-type editors (HeroConfig, FeaturesConfig, etc.) into separate files under /pages/admin/homepage/.",
+    "Duplicate helper 'last = await db.homepage_sections.find_one({}, {\"sort_order\": 1}, sort=[(\"sort_order\", -1)])' appears in both admin_create_section and admin_duplicate_section. Extract into a small helper _next_sort_order() (DRY).",
+    "In admin_reorder_sections the loop does N Mongo updates sequentially (`await` per id). For a homepage this is fine (≤ ~20 sections), but for larger reorder scenarios consider bulk_write with UpdateOne operations.",
+    "In admin_duplicate_section, copy.pop('_id', None) is called twice — once suffices since Mongo's insert_one mutates the dict adding _id back; the second pop is the effective one. Not a bug but confusing.",
+    "PublicFooter fetches /api/content on every mount for every public page — consider a small module-level cache or React Query to avoid 8+ fetches per session as the user navigates.",
+    "Frontend Landing.jsx: highlightTitle splits with a Regex built from user-controlled 'highlighted_word'. It correctly escapes special chars — good. But if highlighted_word is empty string, .split() with an empty capture group would create infinite splits; the current `if (!word)` guard covers this, but worth adding a unit test."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_homepage.py (NEW)"
+  ],
+  "success_rate": {
+    "backend": "100% (26/26 new homepage tests + 150/156 across all backend suites; the 6 non-homepage failures/errors are pre-existing test-env issues: 5 gallery/comments tests skipped because test user was rate-limit-blocked, 1 flaky missing-birds stats counter)",
+    "frontend": "100% (admin homepage builder full CRUD flow — add, edit, save, toggle visible, duplicate, move up/down, delete confirm — all work end-to-end; public landing renders sections dynamically with orange highlighted word; PublicFooter appears on all 8 public pages)"
+  },
+  "test_credentials": "admin@papegojregistret.se / Admin123! (from /app/memory/test_credentials.md). NOTE: test@papegojregistret.se was rate-limit-blocked ('Kontot är blockerat') during the full backend suite run; homepage tests do not depend on this account.",
+  "seed_data_creation": "During UI test I created 'TEST_UI_section' → renamed to 'TEST_UI_edited' → toggled hidden → toggled visible → duplicated (creating 'TEST_UI_edited (kopia)') → moved up → deleted both sections. Final Sektioner count returned to 4 (the seeded baseline). All TEST_-prefixed items also cleaned by pytest fixtures.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Homepage builder is fully validated backend + frontend. All 4 seeded sections in place (hero+emergency_cta+features visible; text_block hidden). Public GET /api/homepage returns 3 visible sections; admin GET returns 4. Only one minor UI polish item left: the <div>-inside-<p> hydration warning in Homepage.jsx SectionListItem (line ~83). For next testing iteration, if test-user gallery/comments tests start failing with '403 Kontot är blockerat', un-block via Mongo: db.users.updateOne({email:'test@papegojregistret.se'},{$set:{failed_login_attempts:0,locked_until:null}}). Backend regression: 150/156 pass, the 6 failures are all pre-existing and unrelated to homepage.",
+  "rca of the issue": "N/A - all functional flows pass. Single non-critical warning is React HTML nesting: <p> element can only contain phrasing content, but Badge component uses <div> which is flow content. Browsers auto-close the <p> when encountering the <div>, causing a hydration mismatch warning. Fix: change `<p className='...'>{section.label}{!section.is_visible && <Badge>Dold</Badge>}</p>` to a `<div>` or `<span>` wrapper (add display:flex if needed for layout)."
+}

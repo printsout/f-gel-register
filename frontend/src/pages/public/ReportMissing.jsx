@@ -20,6 +20,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from "@/components/ui/dialog";
+import PublicFooter from "@/components/PublicFooter";
 
 export default function ReportMissing() {
     const navigate = useNavigate();
@@ -260,6 +261,8 @@ export default function ReportMissing() {
                     </Button>
                 </form>
             </div>
+
+            <PublicFooter />
 
             {/* Success popup */}
             <Dialog open={showSuccess} onOpenChange={(v) => {
