@@ -26,6 +26,7 @@ import AdminPosts from "@/pages/admin/Posts";
 import AdminMissingBirds from "@/pages/admin/MissingBirds";
 import AdminContent from "@/pages/admin/Content";
 import AdminHomepage from "@/pages/admin/Homepage";
+import AdminMenu from "@/pages/admin/Menu";
 
 function AppRoutes() {
     const location = useLocation();
@@ -90,6 +91,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <AdminHomepage />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/menu"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <AdminMenu />
                     </ProtectedRoute>
                 }
             />

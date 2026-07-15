@@ -321,6 +321,27 @@ class HomepageReorder(BaseModel):
     ids: List[str]
 
 
+class MenuItemInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    label: str = Field(min_length=1, max_length=60)
+    url: str = Field(min_length=1, max_length=200)
+    parent_id: Optional[str] = None
+    is_visible: bool = True
+
+
+class MenuItemUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    label: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    url: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    parent_id: Optional[str] = None
+    is_visible: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class MenuReorder(BaseModel):
+    ids: List[str]
+
+
 class UserUpdate(BaseModel):
     role: Optional[Literal["user", "admin"]] = None
     is_blocked: Optional[bool] = None
@@ -960,6 +981,110 @@ async def admin_delete_section(section_id: str, admin: dict = Depends(require_ad
 
 
 # ----------------------------------------------------------------------------
+# Navigation menu (top-nav with dropdowns)
+# ----------------------------------------------------------------------------
+def _menu_item_out(doc: dict) -> dict:
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api.get("/menu")
+async def get_public_menu():
+    """Return menu as a tree: top-level items with children[] for dropdowns."""
+    items = await db.menu_items.find(
+        {"is_visible": True},
+        {"_id": 0},
+    ).sort("sort_order", 1).to_list(200)
+    tops = [i for i in items if not i.get("parent_id")]
+    children_by_parent = {}
+    for i in items:
+        if i.get("parent_id"):
+            children_by_parent.setdefault(i["parent_id"], []).append(i)
+    for t in tops:
+        t["children"] = children_by_parent.get(t["id"], [])
+    return tops
+
+
+@api.get("/admin/menu")
+async def admin_list_menu(_: dict = Depends(require_admin)):
+    return await db.menu_items.find({}, {"_id": 0}).sort("sort_order", 1).to_list(200)
+
+
+@api.post("/admin/menu")
+async def admin_create_menu_item(data: MenuItemInput, admin: dict = Depends(require_admin)):
+    if data.parent_id:
+        parent = await db.menu_items.find_one({"id": data.parent_id})
+        if not parent:
+            raise HTTPException(status_code=400, detail="Överordnat menyval hittades inte")
+        if parent.get("parent_id"):
+            raise HTTPException(status_code=400, detail="Meny stöder endast en nivå av rullgardin")
+    # Auto-place at end of siblings
+    sibling_q = {"parent_id": data.parent_id} if data.parent_id else {"parent_id": None}
+    last = await db.menu_items.find_one(sibling_q, sort=[("sort_order", -1)])
+    next_order = (last["sort_order"] + 1) if last else 0
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "label": data.label,
+        "url": data.url,
+        "parent_id": data.parent_id,
+        "is_visible": data.is_visible,
+        "sort_order": next_order,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.menu_items.insert_one(doc)
+    await log_activity(admin["user_id"], admin["email"], "admin.menu.create", doc["id"], {"label": data.label})
+    return _menu_item_out(doc)
+
+
+@api.patch("/admin/menu/{item_id}")
+async def admin_update_menu_item(item_id: str, updates: MenuItemUpdate, admin: dict = Depends(require_admin)):
+    payload = updates.model_dump(exclude_unset=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Inget att uppdatera")
+    if "parent_id" in payload and payload["parent_id"]:
+        if payload["parent_id"] == item_id:
+            raise HTTPException(status_code=400, detail="En sida kan inte vara sitt eget överordnade val")
+        parent = await db.menu_items.find_one({"id": payload["parent_id"]})
+        if not parent:
+            raise HTTPException(status_code=400, detail="Överordnat menyval hittades inte")
+        if parent.get("parent_id"):
+            raise HTTPException(status_code=400, detail="Meny stöder endast en nivå av rullgardin")
+        # Prevent making a top-level item a child if it has children
+        has_kids = await db.menu_items.count_documents({"parent_id": item_id})
+        if has_kids:
+            raise HTTPException(status_code=400, detail="Detta menyval har underval — flytta dem först")
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.menu_items.update_one({"id": item_id}, {"$set": payload})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Menyval hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.menu.update", item_id)
+    return _menu_item_out(await db.menu_items.find_one({"id": item_id}))
+
+
+@api.post("/admin/menu/reorder")
+async def admin_reorder_menu(data: MenuReorder, admin: dict = Depends(require_admin)):
+    for idx, item_id in enumerate(data.ids):
+        await db.menu_items.update_one(
+            {"id": item_id},
+            {"$set": {"sort_order": idx, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    await log_activity(admin["user_id"], admin["email"], "admin.menu.reorder", "*", {"count": len(data.ids)})
+    return {"success": True}
+
+
+@api.delete("/admin/menu/{item_id}")
+async def admin_delete_menu_item(item_id: str, admin: dict = Depends(require_admin)):
+    # Also delete children
+    await db.menu_items.delete_many({"parent_id": item_id})
+    result = await db.menu_items.delete_one({"id": item_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Menyval hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.menu.delete", item_id)
+    return {"success": True}
+
+
+# ----------------------------------------------------------------------------
 # Community posts (moderated)
 # ----------------------------------------------------------------------------
 def _sanitize_post(doc: dict, include_private: bool = False) -> dict:
@@ -1525,6 +1650,9 @@ async def startup():
     await db.content_pages.create_index("id", unique=True)
     await db.homepage_sections.create_index("id", unique=True)
     await db.homepage_sections.create_index("sort_order")
+    await db.menu_items.create_index("id", unique=True)
+    await db.menu_items.create_index("parent_id")
+    await db.menu_items.create_index("sort_order")
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1780,6 +1908,36 @@ async def startup():
                 "created_at": now,
                 "updated_at": now,
             })
+
+    # Seed default navigation menu (top-nav with dropdowns) — only if empty
+    if await db.menu_items.count_documents({}) == 0:
+        def _seed_top(label: str, url: str, order: int) -> str:
+            item_id = str(uuid.uuid4())
+            return {
+                "id": item_id, "label": label, "url": url, "parent_id": None,
+                "is_visible": True, "sort_order": order, "created_at": now, "updated_at": now,
+            }
+        def _seed_child(parent_id: str, label: str, url: str, order: int):
+            return {
+                "id": str(uuid.uuid4()), "label": label, "url": url, "parent_id": parent_id,
+                "is_visible": True, "sort_order": order, "created_at": now, "updated_at": now,
+            }
+        register = _seed_top("Registrera", "/registrera-fagel", 0)
+        report = _seed_top("Rapportera", "#", 1)
+        community = _seed_top("Community", "/galleri", 2)
+        await db.menu_items.insert_many([
+            register,
+            _seed_child(register["id"], "Registrera fågel", "/registrera-fagel", 0),
+            _seed_child(register["id"], "Om ringnummer", "/sidor/faq", 1),
+            report,
+            _seed_child(report["id"], "Rapportera hittad fågel", "/rapportera-hittad", 0),
+            _seed_child(report["id"], "Rapportera bortflögen", "/rapportera-bortflygen", 1),
+            _seed_child(report["id"], "Lista på hittade fåglar", "/hittade-faglar", 2),
+            community,
+            _seed_child(community["id"], "Galleri", "/galleri", 0),
+            _seed_child(community["id"], "Om oss", "/sidor/om-oss", 1),
+            _seed_child(community["id"], "Kontakt", "/sidor/kontakt", 2),
+        ])
 
 
 @app.on_event("shutdown")

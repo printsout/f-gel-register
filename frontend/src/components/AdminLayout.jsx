@@ -17,6 +17,7 @@ import {
     WarningCircle,
     FileText,
     Layout,
+    List as ListMenu,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 const NAV = [
     { to: "/admin", label: "Översikt", icon: ChartLineUp, end: true },
     { to: "/admin/homepage", label: "Startsida-byggare", icon: Layout },
+    { to: "/admin/menu", label: "Meny (rullgardin)", icon: ListMenu },
     { to: "/admin/posts", label: "Inlägg (granskning)", icon: ImageSquare },
     { to: "/admin/registered-birds", label: "Registrerade fåglar", icon: Bird },
     { to: "/admin/missing-birds", label: "Bortflögna (privat)", icon: WarningCircle },

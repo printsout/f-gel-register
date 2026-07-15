@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 7 — Navigation menu (top-nav dropdowns) feature: 19/19 new backend tests pass (/app/backend/tests/test_menu.py). Seed verified: 3 tops (Registrera=2, Rapportera=3, Community=3 children). Full admin CRUD tested: POST /api/admin/menu creates top-level + child; parent must exist (400 for invalid parent_id); single-level rullgardin enforced (creating a grandchild returns 400 'Meny stöder endast en nivå'). PATCH updates label/url; rejects self-parenting (400 'kan inte vara sitt eget överordnade val'); rejects making a parent-with-children into a child (400 'flytta dem först'); 404 for missing item. POST /api/admin/menu/reorder re-numbers sort_order 0..N-1 and public GET /api/menu reflects new order. DELETE cascades — parent + all children removed; 404 for missing. Privacy verified: hidden items excluded from public GET /api/menu but present in GET /api/admin/menu (11 items total in admin, 3 tops shown in public tree; a hidden test item was correctly filtered). Non-admin blocked (403) on all admin routes; anon gets 401. Frontend /admin/menu: heading 'Meny (rullgardin)' + subtitle + Förhandsvisa + Nytt huvudval buttons render. Menystruktur (11 val) card shows tree — 3 top items each with '(N) rullgardin-val' badge, children indented (ml-8) with CaretRight prefix, URL in font-mono. 'Lägg till rullgardin-val' button appears under each top-level (3 total). Nytt huvudval dialog fields (Etikett, Länk, Placering, Synlig) all present; create + immediate list refresh works; edit dialog pre-populates label/url; eye-toggle immediately updates 'Dold' badge; delete confirm dialog + row removed from list. Sidebar has 'Meny (rullgardin)' between 'Startsida-byggare' and 'Inlägg (granskning)'. Landing / renders 3 dropdown triggers (Registrera, Rapportera, Community) with CaretDown icon; clicking Registrera opens shadcn DropdownMenuContent showing 2 children (Registrera fågel, Om ringnummer). Existing logo (nav-logo) + Logga in button still visible. Hero highlighted word 'Papegojregistret' renders in orange (.text-primary). Regression: all 13 admin pages (/admin, /admin/homepage, /admin/menu, /admin/posts, /admin/missing-birds, /admin/content, /admin/users, /admin/registered-birds, /admin/found-birds, /admin/discount-codes, /admin/feedback, /admin/comments, /admin/activity) load with proper h1 and no error boundary. All 6 public pages (/, /galleri, /hittade-faglar, /registrera-fagel, /rapportera-hittad, /rapportera-bortflygen) load OK.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/menu", "issue": "Response mutates the source dict (t['children'] = ...) on the same dicts that could theoretically be shared if we ever cached — currently safe since to_list returns fresh docs each call. Not a bug, just a note."},
+      {"endpoint": "POST /api/admin/menu/reorder", "issue": "No validation that all supplied ids actually exist; unknown ids are silently ignored (update_one match_count=0 accepted). Consider validating ids ⊆ existing items and returning 400 on drift."},
+      {"endpoint": "POST /api/admin/menu/reorder", "issue": "Loop does N sequential await update_one calls. For small menus (~15 items) fine; for larger lists consider bulk_write with UpdateOne."},
+      {"endpoint": "POST /api/admin/menu", "issue": "MenuItemInput uses default Pydantic model — recommend extra='forbid' to catch typo'd field names in admin UI."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PublicHeader mobile bar", "issue": "The mobile <div className='md:hidden ... overflow-x-auto'> renders EVERY top-level menu item as a TopLink even if it is a dropdown (with children). Dropdown children are NOT accessible on mobile — a user on a phone can only see the top-level label but never open its dropdown. The mobile fallback re-maps a childed item to its first child's URL, which is a silent behavior change (the click destination differs from desktop). Consider a mobile drawer/accordion.", "selector": ".md:hidden [data-testid^='nav-link-']", "priority": "MEDIUM"},
+      {"component": "PublicHeader mobile bar", "issue": "Because the same nav-link-{id} data-testid is reused in both desktop and mobile bars, page.query_selector_all('[data-testid^=\"nav-link-\"]') returns duplicated ids (both desktop simple links + mobile duplicates). Consider distinct testids like nav-mobile-link-{id}.", "selector": "[data-testid^='nav-link-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Public pages other than /", "issues": ["Only Landing.jsx uses <PublicHeader />. The other public pages (/registrera-fagel, /rapportera-hittad, /rapportera-bortflygen, /galleri, /hittade-faglar, /sidor/*) still use their inline old headers with hard-coded links. Users lose access to the configurable dropdown menu once they navigate off /. Consider rolling out PublicHeader to all public pages (noted in the request as intentional-for-now, but flagging for next iteration)."]},
+      {"screen": "/rapportera-bortflygen (regression, unrelated to menu)", "issues": ["Uses native <input type='date'> browser date picker instead of shadcn Calendar component (also present on ReportFound)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_menu.py",
+    "/app/test_reports/pytest/iteration_7_menu.xml"
+  ],
+  "action_items": [
+    "MEDIUM: Fix mobile menu UX in PublicHeader — mobile bar collapses each dropdown into just its first child URL, hiding all other rullgardin-val on phones. Implement a mobile-friendly disclosure (accordion or full drawer) so dropdown children are reachable.",
+    "LOW: Consider extra='forbid' on MenuItemInput/MenuItemUpdate Pydantic models to fail fast on typo'd fields.",
+    "LOW: Validate ids in POST /api/admin/menu/reorder (currently silently ignores unknown ids).",
+    "LOW: Use distinct data-testid for desktop vs mobile nav links (nav-link-{id} vs nav-mobile-link-{id}) to make automated selectors unambiguous.",
+    "OPTIONAL: Roll out <PublicHeader /> to the rest of the public pages so the dropdown nav is consistent across the site.",
+    "OPTIONAL (from prior iterations, not blocking): Split server.py (now >1961 lines) into per-domain routers; extract Menu.jsx dialog into its own component if it grows."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1961 lines (up from 1802 in iter-6). This is the single biggest maintainability risk in the codebase — strongly recommend splitting into per-domain routers (auth, admin_users, birds, posts, content, homepage, menu). A menu router alone would be ~100 lines and self-contained.",
+    "In admin_update_menu_item, the branch that validates parent_id checks 'if payload[\"parent_id\"] and payload[\"parent_id\"] == item_id' — good — but it doesn't defend against multi-hop cycles (A→B→A). Since the API only allows single-level parenting (parent must have parent_id=null), a cycle in practice is impossible, but if that constraint is ever loosened, cycles would slip through. Add a defensive traversal or keep the single-level invariant an explicit test.",
+    "PublicHeader fetches /api/menu on every mount of Landing (only Landing uses it currently). Consider a small module-level cache or React Query to survive route changes when the header rolls out to more pages.",
+    "Menu.jsx (449 lines) is a single-file page; ItemRow could be extracted, and the dialog + confirm dialog could move to /pages/admin/menu/*.jsx if the feature grows.",
+    "In PublicHeader.jsx, the regex /^https?:\\/\\//.test(item.url) is duplicated in TopLink and DropdownItem — extract to a helper isExternalUrl().",
+    "In Menu.jsx move(item, delta), when reordering, the whole tree is refreshed via load() but the local state is not updated until the round-trip completes. For fast-clicking users a small optimistic update would avoid the flicker."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_menu.py (NEW)"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 new menu tests pass; seed structure + CRUD + reorder + cascade + privacy + auth all green)",
+    "frontend": "100% on core admin + public dropdown flows (create/edit/toggle/delete on /admin/menu; landing top-nav renders 3 dropdown triggers with children opening on click). One medium-priority mobile UX gap noted."
+  },
+  "test_credentials": "admin@papegojregistret.se / Admin123! (from /app/memory/test_credentials.md). Test user account not required for menu tests but used for 403 admin protection assertions.",
+  "seed_data_creation": "During tests, ~10 TEST_-prefixed menu items were created and cleaned up by a module-scoped fixture (cleanup_test_items). One 'TEST_UI_Top' item was created via the admin UI, edited to 'TEST_UI_Top_edited', hidden then deleted via the confirm dialog. Final admin menu count returned to 11 (the seeded baseline).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Menu feature (backend + admin UI + landing dropdown) fully validated. Seed structure: 3 tops (Registrera=2, Rapportera=3, Community=3 children) = 11 total items. Only remaining work is UX polish for mobile (see MEDIUM action item) and optional roll-out of <PublicHeader /> to non-Landing public pages. All other admin/public pages continue to load cleanly. Note the two minor mobile-header duplication in data-testid nav-link-{id} — if writing playwright, dedupe by parent element (desktop nav vs .md:hidden bar).",
+  "rca of the issue": "N/A — no bugs in the menu feature. All 19 backend tests green, all admin CRUD + public tree flows work end-to-end in the browser. The mobile UX gap is a known limitation of the current implementation, not a broken flow."
+}

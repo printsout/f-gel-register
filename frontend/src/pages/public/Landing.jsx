@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import PublicFooter from "@/components/PublicFooter";
+import PublicHeader from "@/components/PublicHeader";
 import api from "@/lib/api";
 
 const ICON_MAP = {
@@ -217,43 +218,7 @@ export default function Landing() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card/80 backdrop-blur">
-                <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div
-                            className="w-9 h-9 rounded-md flex items-center justify-center"
-                            style={{ background: "hsl(var(--primary))" }}
-                        >
-                            <Feather size={20} weight="duotone" color="#fff" />
-                        </div>
-                        <span className="font-display font-bold">Papegojregistret</span>
-                    </div>
-                    <nav className="flex items-center gap-1 sm:gap-3">
-                        <Link to="/galleri" className="text-sm text-muted-foreground hover:text-foreground px-3 py-2" data-testid="link-gallery">Galleri</Link>
-                        <Link to="/hittade-faglar" className="text-sm text-muted-foreground hover:text-foreground px-3 py-2" data-testid="link-found-list">Hittade fåglar</Link>
-                        <Link to="/rapportera-bortflygen" className="text-sm text-muted-foreground hover:text-foreground px-3 py-2 hidden sm:inline-block" data-testid="link-report-missing">Bortflögen fågel</Link>
-                        <Link to="/rapportera-hittad" className="text-sm text-muted-foreground hover:text-foreground px-3 py-2 hidden sm:inline-block" data-testid="link-report">Rapportera fynd</Link>
-                        {user ? (
-                            <>
-                                <Link to="/mina-faglar">
-                                    <Button size="sm" variant="outline" data-testid="button-my-birds">Mina inlägg</Button>
-                                </Link>
-                                {isAdmin && (
-                                    <Link to="/admin">
-                                        <Button size="sm" data-testid="button-goto-admin">Admin</Button>
-                                    </Link>
-                                )}
-                            </>
-                        ) : (
-                            <Link to="/login">
-                                <Button size="sm" variant="outline" data-testid="button-login-nav">
-                                    <SignIn size={16} className="mr-1.5" /> Logga in
-                                </Button>
-                            </Link>
-                        )}
-                    </nav>
-                </div>
-            </header>
+            <PublicHeader />
 
             {loading && (
                 <div className="max-w-6xl mx-auto px-6 py-20 text-center text-muted-foreground">
