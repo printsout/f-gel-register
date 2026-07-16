@@ -21,6 +21,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import PublicFooter from "@/components/PublicFooter";
+import SpeciesSelect from "@/components/SpeciesSelect";
 
 export default function ReportMissing() {
     const navigate = useNavigate();
@@ -161,16 +162,13 @@ export default function ReportMissing() {
                     <div className="grid sm:grid-cols-2 gap-4">
                         <div>
                             <Label htmlFor="sp">Fågelart *</Label>
-                            <Input
-                                id="sp"
-                                required
-                                placeholder="Ex. Ara – Blå och gul"
-                                data-testid="input-species"
-                                value={form.species}
-                                onChange={(e) =>
-                                    setForm({ ...form, species: e.target.value })
-                                }
-                            />
+                            <div className="mt-1">
+                                <SpeciesSelect
+                                    value={form.species}
+                                    onChange={(v) => setForm({ ...form, species: v })}
+                                    testid="select-species"
+                                />
+                            </div>
                         </div>
                         <div>
                             <Label htmlFor="rn">Ringnummer (om finns)</Label>

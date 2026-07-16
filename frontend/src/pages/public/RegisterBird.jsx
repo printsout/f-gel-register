@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import PublicFooter from "@/components/PublicFooter";
+import SpeciesSelect from "@/components/SpeciesSelect";
 import {
     Select,
     SelectContent,
@@ -18,30 +19,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
-const SPECIES = [
-    "Ara – Blå och gul",
-    "Ara – Grönvingad",
-    "Ara – Hyacint",
-    "Ara – Röd (Scarlet)",
-    "Amazone – Blåpannad",
-    "Amazone – Dubbelgul",
-    "Grå papegoja – Kongo",
-    "Grå papegoja – Timneh",
-    "Kakadu – Alba",
-    "Kakadu – Molukk",
-    "Kakadu – Galah (Rosa)",
-    "Conure – Sol",
-    "Conure – Grönkindad",
-    "Lovebird – Fischer",
-    "Eclectus",
-    "Cockatiel (Korella)",
-    "Undulat",
-    "Senegal papegoja",
-    "Quaker papegoja (Monk)",
-    "Indian Ringneck",
-    "Alexandrine papegoja",
-    "Annat",
-];
+const SPECIES_LEGACY_STUB = [];
 
 export default function RegisterBird() {
     const navigate = useNavigate();
@@ -117,25 +95,16 @@ export default function RegisterBird() {
                 <form onSubmit={submit} className="surface p-6 space-y-5 fade-in">
                     <div>
                         <Label htmlFor="species">Fågelart *</Label>
-                        <Select
-                            value={form.species}
-                            onValueChange={(v) => setForm({ ...form, species: v })}
-                        >
-                            <SelectTrigger
-                                id="species"
-                                data-testid="select-species"
-                                className="mt-1"
-                            >
-                                <SelectValue placeholder="Välj art" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {SPECIES.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                        {s}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="mt-1">
+                            <SpeciesSelect
+                                value={form.species}
+                                onChange={(v) => setForm({ ...form, species: v })}
+                                testid="select-species"
+                            />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Grupperat efter familj — skriv i sökrutan för att filtrera bland över 150 arter.
+                        </p>
                     </div>
                     <div>
                         <Label htmlFor="ring">Ringnummer *</Label>

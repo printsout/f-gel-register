@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 8 — SpeciesSelect (searchable combobox with 150+ grouped species) verified end-to-end. Backend: 18/18 tests pass in test_species_long_strings.py — POST /api/registered-birds and POST /api/missing-birds both accept long species strings like 'Grå papegoja – Kongo (Psittacus erithacus)' and 'Ara – Grönvingad (Ara chloropterus)', round-trip preserves the exact value, no _id leaks, and rows appear in the admin lists. Admin GETs for /admin/registered-birds, /admin/missing-birds, /admin/menu, /admin/homepage, /admin/content, /admin/posts all return 200. Frontend UI verified via Playwright: (1) /registrera-fagel — SpeciesSelect trigger renders with placeholder 'Välj eller sök art…' and data-testid='select-species'; clicking opens Popover with 149 items rendered across 16 group headings (Ara Macaws, Amazoner, Kakaduor, Grå papegojor, Eclectus, Conurer, Lori/Lorikeet, Poicephalus, Pionus, Caiques, Ringnecks & Alexandriner, Dvärgpapegojor, Quaker/Munkparakit, Australiska parakiter, Övriga, Annat). (2) Search 'Grönvingad' narrows to the correct item; clicking populates trigger with 'Ara – Grönvingad (Ara chloropterus)' and closes popover; re-opening shows Check icon on the selected item. (3) Full submit flow: ring + owner + phone + accept-terms → success toast 'Fågel registrerad! Se den i galleriet.' and redirect to /galleri; bird persisted with full species string visible in /admin/registered-birds. (4) /rapportera-bortflygen — SpeciesSelect replaced the free-text Input; same trigger/testids; selected 'Ara – Grönvingad (Ara chloropterus)' and submit produced success dialog (data-testid='dialog-missing-success') with expected copy; close returns to /. (5) Regression: all admin pages load with correct h1s (Bortflögna fåglar, Startsida-byggare, Meny (rullgardin), Innehåll, Inlägg) and no error boundary. Long species string visible in admin registered-birds table (may truncate visually but does not error).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SpeciesSelect (cmdk Command)", "issue": "cmdk's default fuzzy filter over-matches short queries. Search 'Ara' returns 116/149 items (fuzzy subsequence match a-r-a hits nearly every scientific name); 'Kongo' returns 3 items where only 1 truly contains 'Kongo' (the other two 'Lori – Duskyorange' and 'Caique – Vitbukig (Pionites leucogaster)' are fuzzy false-positives); 'zzz' shows 15 items instead of the intended CommandEmpty 'Ingen art matchar.' state — the empty state never triggers because low-scored items still slip through. Consider passing a stricter custom filter to <Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}> to enforce substring-only matching, which is what the request statement described ('Kongo' should show only Grå papegoja – Kongo).", "selector": "[data-testid='select-species']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SpeciesSelect popover", "issues": ["Group heading font styling differs from typical shadcn Command examples — headings appear in muted default (looks fine but check families like 'Poicephalus (Afrikanska tigger-papegojor)' — long parenthetical can wrap on narrower triggers)."]},
+      {"screen": "Data-testid for options", "issues": ["species-option-<value> testid uses the first 30 chars of the item text; several Ara items (e.g., 'Ara – Blå och gul...' vs 'Ara – Blå-gul-hybrid...') could collide on the same 30-char prefix. Consider using an index or the full slugified value to guarantee uniqueness."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_species_long_strings.py",
+    "/app/test_reports/pytest/iteration_8_species.xml"
+  ],
+  "action_items": [
+    "MEDIUM: Tighten SpeciesSelect search filter. Pass a custom `filter` prop to <Command> that only matches on case-insensitive substring (or normalised diacritics). Current cmdk fuzzy default lets 'Ara' match 116 items and 'Kongo' match 3 (should be 1). The empty state 'Ingen art matchar.' never appears in practice.",
+    "LOW: Make species-option testids unique — the 30-char substring can collide on Ara/Amazon/Kakadu variants. Suggest `species-option-${i}` or slugify(full value).",
+    "OPTIONAL: The requirement described in the review request ('typing zzz should show Ingen art matchar') will not be satisfied until the custom filter above is added.",
+    "OPTIONAL (pre-existing from iter-7): server.py is ~1961 lines — split into per-domain routers."
+  ],
+  "critical_code_review_comments": [
+    "SpeciesSelect.jsx wires <CommandInput> but does not pass a `filter` prop to <Command>, so the default command-score fuzzy matcher is used — this is why 'zzz' still shows 15 items. A one-line fix: <Command filter={(value, search) => value.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').includes(search.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')) ? 1 : 0}>.",
+    "parrotSpecies.js: 'Hyacint hyacintara (Anodorhynchus hyacinthinus)' appears in group 'Övriga' AND 'Ara – Hyacint (Anodorhynchus hyacinthinus)' in group 'Ara (Macaws)' — same scientific name Anodorhynchus hyacinthinus listed twice under different Swedish names. Consider dedup.",
+    "parrotSpecies.js: 'Kakadu – Svart / Röd-tailed (Calyptorhynchus banksii)' mixes Swedish ('Röd-') and English ('tailed') — awkward hybrid. Also 'Röd-sided', 'Yellow-collared', 'Purple-naped', 'Röd-rumped', 'Yellow-bibbed', 'Röd-faced' etc. — decide on a consistent naming convention (all Swedish preferred, or mark English variants clearly).",
+    "parrotSpecies.js: A few likely typos — 'Kakadu – Röshuvad' (should be 'Rödhuvad'), 'Vasa-papegoja' (dash convention differs from 'Grå papegoja'), 'Conure – Solstice (Aratinga solstitialis mutation)' — 'mutation' isn't a real subspecies, and 'Conure – Sol / Sun (Aratinga solstitialis)' is already listed — Solstice looks duplicative.",
+    "SpeciesSelect key={item} — if any two items share identical strings (e.g., a duplicated hybrid entry), React will warn. Consider key={`${group.family}-${item}`} or an id field.",
+    "SpeciesSelect: no keyboard-clear-on-close — reopening the popover keeps the previous search string. Minor UX; can be fixed by resetting local search state onOpenChange.",
+    "RegisterBird.jsx still imports Select/SelectContent/SelectItem/SelectTrigger/SelectValue and keeps `const SPECIES_LEGACY_STUB = [];` after replacing with SpeciesSelect. Dead code — remove."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_species_long_strings.py (NEW)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 species long-string + admin route regression tests pass)",
+    "frontend": "95% — core flows (register + report-missing with SpeciesSelect selection and submit) work end-to-end; one MEDIUM search-filter issue (fuzzy over-matching) noted above."
+  },
+  "test_credentials": "admin@papegojregistret.se / Admin123! from /app/memory/test_credentials.md",
+  "seed_data_creation": "1 registered bird ('SEUI4166245', species 'Ara – Grönvingad (Ara chloropterus)') and 1 missing bird ('TEST_Missing_Owner_*', same species) created via UI; both deleted via admin API at end of testing. 3 registered + 3 missing birds created via pytest also fully cleaned up by teardown steps.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SpeciesSelect (cmdk Popover+Command) is now shared between /registrera-fagel and /rapportera-bortflygen. Trigger testid='select-species', input testid='select-species-search'. If future iterations tighten the search filter (see MEDIUM action item), re-run: (a) 'Ara' should return only 16 items (the Ara group), (b) 'Kongo' should return exactly 1 item, (c) 'zzz' should show CommandEmpty text 'Ingen art matchar.'. Backend accepts species as an unrestricted string so no enum validation to worry about.",
+  "rca of the issue": "The MEDIUM search filter issue is caused by cmdk's default fuzzy-match scoring (command-score). SpeciesSelect wraps <Command> without a custom `filter` prop, so cmdk scores every item against the query as a subsequence-with-gaps match. Even for 'zzz' where no item contains 'zzz' consecutively, items get non-zero scores when a single 'z' appears somewhere in the text (e.g., 'Amazona'), so CommandEmpty never renders. Reproduction: open the popover on /registrera-fagel, type 'zzz' — 15 items remain. Mitigation: pass a strict substring filter to <Command>. One-line fix suggested in critical_code_review_comments."
+}
