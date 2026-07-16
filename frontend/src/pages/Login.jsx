@@ -57,17 +57,13 @@ export default function Login() {
         <div className="min-h-screen grid lg:grid-cols-2 bg-background">
             {/* Left – form */}
             <div className="flex flex-col justify-between px-8 lg:px-16 py-10">
-                <div className="flex items-center gap-3">
-                    <div
-                        className="w-10 h-10 rounded-md flex items-center justify-center"
-                        style={{ background: "hsl(var(--primary))" }}
-                    >
-                        <Feather size={22} weight="duotone" color="#fff" />
-                    </div>
-                    <span className="font-display font-bold text-lg">
-                        Papegojregistret
-                    </span>
-                </div>
+                <Link to="/" className="flex items-center gap-3 flex-shrink-0" aria-label="Till startsidan" data-testid="login-logo">
+                    <img
+                        src="/images/fagelregister-logo.png"
+                        alt="Fågelregister"
+                        className="h-11 w-auto"
+                    />
+                </Link>
 
                 <div className="max-w-md w-full mx-auto flex-1 flex flex-col justify-center py-10">
                     <p className="label-caps mb-3">Admin­portal</p>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CaretDown, Feather, SignIn } from "@phosphor-icons/react";
+import { CaretDown, SignIn } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -86,14 +86,17 @@ export default function PublicHeader() {
     return (
         <header className="border-b border-border bg-card/80 backdrop-blur sticky top-0 z-30">
             <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-                <Link to="/" className="flex items-center gap-3 flex-shrink-0" data-testid="nav-logo">
-                    <div
-                        className="w-9 h-9 rounded-md flex items-center justify-center"
-                        style={{ background: "hsl(var(--primary))" }}
-                    >
-                        <Feather size={20} weight="duotone" color="#fff" />
-                    </div>
-                    <span className="font-display font-bold">Papegojregistret</span>
+                <Link
+                    to="/"
+                    className="flex items-center gap-3 flex-shrink-0 group"
+                    data-testid="nav-logo"
+                    aria-label="Till startsidan"
+                >
+                    <img
+                        src="/images/fagelregister-logo.png"
+                        alt="Fågelregister"
+                        className="h-11 md:h-12 w-auto transition-transform group-hover:scale-[1.03]"
+                    />
                 </Link>
 
                 <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
