@@ -39,7 +39,13 @@ export default function SpeciesSelect({
                 className="w-[--radix-popover-trigger-width] p-0"
                 align="start"
             >
-                <Command>
+                <Command
+                    filter={(value, search) => {
+                        const norm = (s) =>
+                            s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        return norm(value).includes(norm(search)) ? 1 : 0;
+                    }}
+                >
                     <div className="flex items-center border-b border-border px-3">
                         <MagnifyingGlass size={14} className="text-muted-foreground" />
                         <CommandInput
@@ -52,15 +58,15 @@ export default function SpeciesSelect({
                         <CommandEmpty>Ingen art matchar.</CommandEmpty>
                         {PARROT_SPECIES.map((group) => (
                             <CommandGroup key={group.family} heading={group.family}>
-                                {group.items.map((item) => (
+                                {group.items.map((item, idx) => (
                                     <CommandItem
-                                        key={item}
+                                        key={`${group.family}-${idx}`}
                                         value={item}
                                         onSelect={() => {
                                             onChange(item);
                                             setOpen(false);
                                         }}
-                                        data-testid={`species-option-${item.substring(0, 30)}`}
+                                        data-testid={`species-option-${group.family.substring(0, 8)}-${idx}`}
                                     >
                                         <Check
                                             size={14}

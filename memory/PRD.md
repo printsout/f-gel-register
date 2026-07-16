@@ -65,6 +65,11 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ New `PublicHeader` component with shadcn DropdownMenu — renders top-nav dynamically from `/api/menu` on Landing. Mobile bar uses the same dropdowns.
 - ✅ 19/19 backend tests + admin/public flows all green.
 
+## Iteration 8 (2026-02-13): Comprehensive species list
+- ✅ `/app/frontend/src/lib/parrotSpecies.js` — 16 families, 150+ species with scientific names.
+- ✅ Shared `SpeciesSelect` combobox (shadcn Popover + Command) with strict substring filter (diacritics-normalized), used on `/registrera-fagel` and `/rapportera-bortflygen`.
+- ✅ 18/18 backend + full frontend end-to-end verified.
+
 ## Backlog (P0/P1/P2)
 ### P1
 - **Stripe integration** for registration payments (only structure in DB; needs Stripe keys from user).

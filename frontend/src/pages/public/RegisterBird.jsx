@@ -11,15 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import PublicFooter from "@/components/PublicFooter";
 import SpeciesSelect from "@/components/SpeciesSelect";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-
-const SPECIES_LEGACY_STUB = [];
 
 export default function RegisterBird() {
     const navigate = useNavigate();
