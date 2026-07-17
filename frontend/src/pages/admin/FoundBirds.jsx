@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MagnifyingGlass, Trash, DownloadSimple, MapPin } from "@phosphor-icons/react";
+import { MagnifyingGlass, Trash, DownloadSimple, MapPin, CheckCircle } from "@phosphor-icons/react";
 import AdminLayout from "@/components/AdminLayout";
 import api, { API, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Table,
     TableBody,
@@ -29,6 +32,7 @@ export default function FoundBirds() {
     const [q, setQ] = useState("");
     const [loading, setLoading] = useState(true);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
@@ -37,6 +41,7 @@ export default function FoundBirds() {
                 params: q ? { search: q } : {},
             });
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -54,6 +59,20 @@ export default function FoundBirds() {
             await api.delete(`/admin/found-birds/${confirmDelete.id}`);
             toast.success("Rapport borttagen.");
             setConfirmDelete(null);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
+    const runBulk = async (action) => {
+        try {
+            const { data } = await api.post("/admin/found-birds/bulk", {
+                ids: bulk.selectedIds,
+                action,
+            });
+            const n = data.deleted ?? data.updated ?? bulk.selectedIds.length;
+            toast.success(`${n} rapport(er) ${action === "delete" ? "borttagna" : "markerade som återlämnade"}.`);
             load();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -107,6 +126,13 @@ export default function FoundBirds() {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-10">
+                                <SelectAllCheckbox
+                                    allSelected={bulk.allSelected}
+                                    someSelected={bulk.someSelected}
+                                    onToggle={bulk.toggleAll}
+                                />
+                            </TableHead>
                             <TableHead>Plats</TableHead>
                             <TableHead>Beskrivning</TableHead>
                             <TableHead>Ringnr</TableHead>
@@ -119,14 +145,14 @@ export default function FoundBirds() {
                     <TableBody>
                         {loading && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                                     Laddar…
                                 </TableCell>
                             </TableRow>
                         )}
                         {!loading && items.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                                     <MapPin size={28} weight="duotone" className="mx-auto mb-2" />
                                     Inga rapporter matchar.
                                 </TableCell>
@@ -137,7 +163,15 @@ export default function FoundBirds() {
                                 <TableRow
                                     key={b.id}
                                     data-testid={`row-found-${b.id}`}
+                                    data-state={bulk.isSelected(b.id) ? "selected" : undefined}
                                 >
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={bulk.isSelected(b.id)}
+                                            onCheckedChange={() => bulk.toggle(b.id)}
+                                            data-testid={`bulk-select-row-${b.id}`}
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-medium">
                                         {b.location}
                                     </TableCell>
@@ -194,6 +228,30 @@ export default function FoundBirds() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="rapporter"
+                actions={[
+                    {
+                        key: "returned",
+                        label: "Markera återlämnade",
+                        icon: <CheckCircle size={14} />,
+                        tone: "success",
+                        confirm: `Markera ${bulk.count} rapport(er) som återlämnade?`,
+                        onRun: () => runBulk("returned"),
+                    },
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} rapport(er) tas bort permanent.`,
+                        onRun: () => runBulk("delete"),
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

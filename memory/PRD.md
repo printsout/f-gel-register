@@ -83,6 +83,25 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ Webhook at `/api/stripe/webhook` (signed) + inline polling fallback. Both call `_activate_payment_for_session` idempotently to flip bird→completed, create/activate `payment_plan`, set `user.membership_active`.
 - ✅ E2E verified with Stripe test card 4242… → bird `payment_status=completed`, plan active with `stripe_subscription_id`, user membership active.
 
+## Iteration 11 (2026-07-17): Admin bulk actions (multi-select + confirm)
+- ✅ Reusable `useBulkSelection` hook + `BulkActionsBar` (sticky) + `SelectAllCheckbox` component.
+- ✅ Row-level and "Markera alla"-checkbox added to every admin list: RegisteredBirds, FoundBirds, Users, DiscountCodes, Comments, Feedback, Posts, MissingBirds, Content, Homepage, Menu, PaymentPlans.
+- ✅ Backend bulk endpoints (all admin-only, log to `activity_logs`):
+  - `POST /api/admin/registered-birds/bulk-delete`
+  - `POST /api/admin/found-birds/bulk` (`delete` | `returned`)
+  - `POST /api/admin/users/bulk` (`delete` | `block` | `unblock`, self-safe)
+  - `POST /api/admin/discount-codes/bulk-delete`
+  - `POST /api/admin/comments/bulk-delete`
+  - `POST /api/admin/feedback/bulk-delete`
+  - `POST /api/admin/posts/bulk` (`approve` | `reject` | `delete`, with optional reject reason)
+  - `POST /api/admin/missing-birds/bulk` (`delete` | `found` | `closed`)
+  - `POST /api/admin/content/bulk-delete`
+  - `POST /api/admin/homepage/bulk` (`delete` | `show` | `hide`)
+  - `POST /api/admin/menu/bulk-delete` (cascades: detaches children)
+  - `POST /api/admin/payment-plans/bulk-cancel`
+- ✅ All destructive/blocking bulk actions show confirmation dialog (Swedish copy).
+- ✅ E2E verified: created 3 test users → header select-all → bulk delete 2 → toast "2 användare borttagna" + row count drops from 4 → 2.
+
 ## Backlog (P0/P1/P2)
 ### P1
 - Hook up `/admin/payment-plans` route in `App.js` + AdminLayout sidebar (page component exists at `/app/frontend/src/pages/admin/PaymentPlans.jsx`).

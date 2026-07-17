@@ -247,6 +247,15 @@ class FeedbackInput(BaseModel):
     email: Optional[EmailStr] = None
 
 
+class ContactMessageInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr
+    phone: Optional[str] = Field(default=None, max_length=40)
+    subject: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=5000)
+
+
 class CommentInput(BaseModel):
     comment_text: str = Field(min_length=1)
     commenter_name: str = Field(min_length=1)
@@ -336,6 +345,36 @@ class HomepageSectionUpdate(BaseModel):
 
 class HomepageReorder(BaseModel):
     ids: List[str]
+
+
+class BulkIdsInput(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+
+
+class BulkPostAction(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    action: Literal["approve", "reject", "delete"]
+    reason: Optional[str] = None
+
+
+class BulkUserAction(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    action: Literal["delete", "block", "unblock"]
+
+
+class BulkMissingAction(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    action: Literal["delete", "found", "closed"]
+
+
+class BulkFoundAction(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    action: Literal["delete", "returned"]
+
+
+class BulkHomepageAction(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    action: Literal["delete", "show", "hide"]
 
 
 class MenuItemInput(BaseModel):
@@ -792,6 +831,59 @@ async def create_feedback(data: FeedbackInput):
 async def list_feedback_public():
     cursor = db.feedback.find({}, {"_id": 0, "email": 0}).sort("created_at", -1)
     return await cursor.to_list(200)
+
+
+@api.post("/contact")
+async def submit_contact_message(data: ContactMessageInput):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "email": data.email,
+        "phone": data.phone,
+        "subject": data.subject,
+        "message": data.message,
+        "status": "new",  # new | read | responded | archived
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.contact_messages.insert_one(doc)
+    doc.pop("_id", None)
+    return {"success": True, "id": doc["id"]}
+
+
+@api.get("/admin/contact-messages")
+async def admin_list_contact_messages(_: dict = Depends(require_admin)):
+    docs = await db.contact_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return docs
+
+
+@api.patch("/admin/contact-messages/{message_id}")
+async def admin_update_contact_message(message_id: str, payload: dict, admin: dict = Depends(require_admin)):
+    allowed = {"status"}
+    updates = {k: v for k, v in payload.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="Inget att uppdatera")
+    result = await db.contact_messages.update_one({"id": message_id}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Meddelande hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.contact.update", message_id, updates)
+    return {"success": True}
+
+
+@api.delete("/admin/contact-messages/{message_id}")
+async def admin_delete_contact_message(message_id: str, admin: dict = Depends(require_admin)):
+    result = await db.contact_messages.delete_one({"id": message_id})
+    if not result.deleted_count:
+        raise HTTPException(status_code=404, detail="Meddelande hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.contact.delete", message_id)
+    return {"success": True}
+
+
+@api.post("/admin/contact-messages/bulk-delete")
+async def admin_bulk_delete_contact(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    n = await _bulk_delete(db.contact_messages, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.contact.bulk_delete", None,
+                       {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
 
 
 @api.post("/discount-codes/validate")
@@ -2164,6 +2256,191 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
+
+
+# ----------------------------------------------------------------------------
+# Bulk admin actions
+# ----------------------------------------------------------------------------
+async def _bulk_delete(collection, ids: List[str], id_field: str = "id") -> int:
+    if not ids:
+        return 0
+    result = await collection.delete_many({id_field: {"$in": ids}})
+    return result.deleted_count
+
+
+@api.post("/admin/registered-birds/bulk-delete")
+async def bulk_delete_registered_birds(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    n = await _bulk_delete(db.registered_birds, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.registered_bird.bulk_delete",
+                       None, {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
+
+
+@api.post("/admin/found-birds/bulk")
+async def bulk_found_birds(payload: BulkFoundAction, admin: dict = Depends(require_admin)):
+    if payload.action == "delete":
+        n = await _bulk_delete(db.found_birds, payload.ids)
+        await log_activity(admin["user_id"], admin["email"], "admin.found_bird.bulk_delete",
+                           None, {"ids": payload.ids, "deleted": n})
+        return {"deleted": n}
+    # returned
+    result = await db.found_birds.update_many(
+        {"id": {"$in": payload.ids}},
+        {"$set": {"status": "returned", "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    await log_activity(admin["user_id"], admin["email"], "admin.found_bird.bulk_returned",
+                       None, {"ids": payload.ids, "matched": result.matched_count})
+    return {"updated": result.modified_count}
+
+
+@api.post("/admin/users/bulk")
+async def bulk_users(payload: BulkUserAction, admin: dict = Depends(require_admin)):
+    # Never let admin bulk-affect their own account
+    ids = [i for i in payload.ids if i != admin["user_id"]]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Du kan inte påverka ditt eget konto")
+    now = datetime.now(timezone.utc).isoformat()
+    if payload.action == "delete":
+        result = await db.users.delete_many({"user_id": {"$in": ids}})
+        await db.registered_birds.update_many({"user_id": {"$in": ids}}, {"$set": {"user_id": None}})
+        await log_activity(admin["user_id"], admin["email"], "admin.user.bulk_delete", None,
+                           {"ids": ids, "deleted": result.deleted_count})
+        return {"deleted": result.deleted_count}
+    is_blocked = payload.action == "block"
+    result = await db.users.update_many(
+        {"user_id": {"$in": ids}},
+        {"$set": {"is_blocked": is_blocked, "updated_at": now}},
+    )
+    await log_activity(admin["user_id"], admin["email"],
+                       f"admin.user.bulk_{payload.action}", None,
+                       {"ids": ids, "matched": result.matched_count})
+    return {"updated": result.modified_count}
+
+
+@api.post("/admin/discount-codes/bulk-delete")
+async def bulk_delete_discount_codes(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    n = await _bulk_delete(db.discount_codes, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.discount.bulk_delete",
+                       None, {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
+
+
+@api.post("/admin/comments/bulk-delete")
+async def bulk_delete_comments(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    n = await _bulk_delete(db.bird_comments, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.comment.bulk_delete",
+                       None, {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
+
+
+@api.post("/admin/feedback/bulk-delete")
+async def bulk_delete_feedback(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    n = await _bulk_delete(db.feedback, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.feedback.bulk_delete",
+                       None, {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
+
+
+@api.post("/admin/posts/bulk")
+async def bulk_posts(payload: BulkPostAction, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    if payload.action == "delete":
+        n = await _bulk_delete(db.posts, payload.ids)
+        await log_activity(admin["user_id"], admin["email"], "admin.post.bulk_delete",
+                           None, {"ids": payload.ids, "deleted": n})
+        return {"deleted": n}
+    if payload.action == "approve":
+        update = {
+            "status": "approved",
+            "reject_reason": None,
+            "moderated_by": admin["user_id"],
+            "moderated_by_email": admin["email"],
+            "moderated_at": now,
+        }
+    else:  # reject
+        update = {
+            "status": "rejected",
+            "reject_reason": payload.reason,
+            "moderated_by": admin["user_id"],
+            "moderated_by_email": admin["email"],
+            "moderated_at": now,
+        }
+    result = await db.posts.update_many({"id": {"$in": payload.ids}}, {"$set": update})
+    await log_activity(admin["user_id"], admin["email"],
+                       f"admin.post.bulk_{payload.action}", None,
+                       {"ids": payload.ids, "matched": result.matched_count})
+    return {"updated": result.modified_count}
+
+
+@api.post("/admin/missing-birds/bulk")
+async def bulk_missing(payload: BulkMissingAction, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    if payload.action == "delete":
+        n = await _bulk_delete(db.missing_birds, payload.ids)
+        await log_activity(admin["user_id"], admin["email"], "admin.missing.bulk_delete",
+                           None, {"ids": payload.ids, "deleted": n})
+        return {"deleted": n}
+    status_map = {"found": "found", "closed": "closed"}
+    result = await db.missing_birds.update_many(
+        {"id": {"$in": payload.ids}},
+        {"$set": {"status": status_map[payload.action], "updated_at": now}},
+    )
+    await log_activity(admin["user_id"], admin["email"],
+                       f"admin.missing.bulk_{payload.action}", None,
+                       {"ids": payload.ids, "matched": result.matched_count})
+    return {"updated": result.modified_count}
+
+
+@api.post("/admin/content/bulk-delete")
+async def bulk_delete_content(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    n = await _bulk_delete(db.content_pages, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.content.bulk_delete",
+                       None, {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
+
+
+@api.post("/admin/homepage/bulk")
+async def bulk_homepage(payload: BulkHomepageAction, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    if payload.action == "delete":
+        n = await _bulk_delete(db.homepage_sections, payload.ids)
+        await log_activity(admin["user_id"], admin["email"], "admin.homepage.bulk_delete",
+                           None, {"ids": payload.ids, "deleted": n})
+        return {"deleted": n}
+    is_visible = payload.action == "show"
+    result = await db.homepage_sections.update_many(
+        {"id": {"$in": payload.ids}},
+        {"$set": {"is_visible": is_visible, "updated_at": now}},
+    )
+    await log_activity(admin["user_id"], admin["email"],
+                       f"admin.homepage.bulk_{payload.action}", None,
+                       {"ids": payload.ids, "matched": result.matched_count})
+    return {"updated": result.modified_count}
+
+
+@api.post("/admin/menu/bulk-delete")
+async def bulk_delete_menu(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    # Also detach children so hierarchy doesn't dangle
+    await db.menu_items.update_many(
+        {"parent_id": {"$in": payload.ids}},
+        {"$set": {"parent_id": None}},
+    )
+    n = await _bulk_delete(db.menu_items, payload.ids)
+    await log_activity(admin["user_id"], admin["email"], "admin.menu.bulk_delete",
+                       None, {"ids": payload.ids, "deleted": n})
+    return {"deleted": n}
+
+
+@api.post("/admin/payment-plans/bulk-cancel")
+async def bulk_cancel_payment_plans(payload: BulkIdsInput, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.payment_plans.update_many(
+        {"id": {"$in": payload.ids}},
+        {"$set": {"status": "cancelled", "updated_at": now}},
+    )
+    await log_activity(admin["user_id"], admin["email"], "admin.payment_plan.bulk_cancel",
+                       None, {"ids": payload.ids, "matched": result.matched_count})
+    return {"updated": result.modified_count}
 
 
 # ----------------------------------------------------------------------------

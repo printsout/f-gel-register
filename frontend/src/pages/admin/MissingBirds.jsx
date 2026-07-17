@@ -21,6 +21,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Tabs,
     TabsList,
@@ -69,11 +72,22 @@ function StatusBadge({ status }) {
     );
 }
 
-function MissingCard({ report, onUpdate, onNotify, onDelete }) {
+function MissingCard({ report, onUpdate, onNotify, onDelete, selected, onToggleSelect }) {
     const isDone = report.status !== "searching";
     return (
-        <div className="surface p-5 fade-in" data-testid={`missing-${report.id}`}>
-            <div className="flex items-start justify-between gap-3 mb-3">
+        <div
+            className={`surface p-5 fade-in relative ${selected ? "ring-2 ring-primary" : ""}`}
+            data-testid={`missing-${report.id}`}
+        >
+            <div className="absolute top-4 left-4">
+                <Checkbox
+                    checked={selected}
+                    onCheckedChange={onToggleSelect}
+                    data-testid={`bulk-select-row-${report.id}`}
+                    aria-label="Markera rapport"
+                />
+            </div>
+            <div className="flex items-start justify-between gap-3 mb-3 pl-8">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-2">
                         <StatusBadge status={report.status} />
@@ -210,6 +224,7 @@ export default function AdminMissingBirds() {
     const [notifyDialog, setNotifyDialog] = useState(null);
     const [notifyMessage, setNotifyMessage] = useState("");
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
@@ -219,6 +234,7 @@ export default function AdminMissingBirds() {
             if (q) params.search = q;
             const { data } = await api.get("/admin/missing-birds", { params });
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -276,6 +292,26 @@ export default function AdminMissingBirds() {
         );
     };
 
+    const runBulk = async (action) => {
+        try {
+            const { data } = await api.post("/admin/missing-birds/bulk", {
+                ids: bulk.selectedIds,
+                action,
+            });
+            const n = data.deleted ?? data.updated ?? bulk.selectedIds.length;
+            const label =
+                action === "delete"
+                    ? "borttagna"
+                    : action === "found"
+                      ? "markerade som hittade"
+                      : "avslutade";
+            toast.success(`${n} rapport(er) ${label}.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
     return (
         <AdminLayout>
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -316,8 +352,8 @@ export default function AdminMissingBirds() {
                 </TabsList>
             </Tabs>
 
-            <div className="surface p-4 mb-6">
-                <div className="relative">
+            <div className="surface p-4 mb-6 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[240px]">
                     <MagnifyingGlass
                         size={16}
                         className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -330,6 +366,18 @@ export default function AdminMissingBirds() {
                         data-testid="input-search-missing"
                     />
                 </div>
+                {items.length > 0 && (
+                    <label className="flex items-center gap-2 text-sm">
+                        <SelectAllCheckbox
+                            allSelected={bulk.allSelected}
+                            someSelected={bulk.someSelected}
+                            onToggle={bulk.toggleAll}
+                        />
+                        <span className="text-muted-foreground">
+                            Markera alla ({items.length})
+                        </span>
+                    </label>
+                )}
             </div>
 
             {loading && (
@@ -342,17 +390,50 @@ export default function AdminMissingBirds() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-24">
                 {items.map((r) => (
                     <MissingCard
                         key={r.id}
                         report={r}
+                        selected={bulk.isSelected(r.id)}
+                        onToggleSelect={() => bulk.toggle(r.id)}
                         onUpdate={updateStatus}
                         onNotify={openNotify}
                         onDelete={setConfirmDelete}
                     />
                 ))}
             </div>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="rapporter"
+                actions={[
+                    {
+                        key: "found",
+                        label: "Markera hittade",
+                        icon: <CheckCircle size={14} />,
+                        tone: "success",
+                        confirm: `Markera ${bulk.count} rapport(er) som hittade?`,
+                        onRun: () => runBulk("found"),
+                    },
+                    {
+                        key: "closed",
+                        label: "Avsluta",
+                        icon: <CheckCircle size={14} />,
+                        confirm: `Avsluta ${bulk.count} rapport(er)?`,
+                        onRun: () => runBulk("closed"),
+                    },
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} rapport(er) tas bort permanent.`,
+                        onRun: () => runBulk("delete"),
+                    },
+                ]}
+            />
 
             <Dialog open={!!notifyDialog} onOpenChange={(v) => !v && setNotifyDialog(null)}>
                 <DialogContent>

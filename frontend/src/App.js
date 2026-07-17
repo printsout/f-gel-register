@@ -15,6 +15,7 @@ import MyBirds from "@/pages/public/MyBirds";
 import ContentPage from "@/pages/public/ContentPage";
 import PaymentSuccess from "@/pages/public/PaymentSuccess";
 import PaymentCancel from "@/pages/public/PaymentCancel";
+import Contact from "@/pages/public/Contact";
 
 import Dashboard from "@/pages/admin/Dashboard";
 import RegisteredBirds from "@/pages/admin/RegisteredBirds";
@@ -47,6 +48,7 @@ function AppRoutes() {
             <Route path="/galleri" element={<Gallery />} />
             <Route path="/mina-faglar" element={<MyBirds />} />
             <Route path="/sidor/:slug" element={<ContentPage />} />
+            <Route path="/kontakt" element={<Contact />} />
             <Route path="/betalning/lyckad" element={<PaymentSuccess />} />
             <Route path="/betalning/avbruten" element={<PaymentCancel />} />
 

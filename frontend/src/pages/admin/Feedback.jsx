@@ -5,6 +5,9 @@ import AdminLayout from "@/components/AdminLayout";
 import api, { API, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -35,12 +38,14 @@ export default function Feedback() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
         try {
             const { data } = await api.get("/admin/feedback");
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -56,6 +61,18 @@ export default function Feedback() {
             await api.delete(`/admin/feedback/${confirmDelete.id}`);
             toast.success("Borttagen.");
             setConfirmDelete(null);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
+    const runBulkDelete = async () => {
+        try {
+            const { data } = await api.post("/admin/feedback/bulk-delete", {
+                ids: bulk.selectedIds,
+            });
+            toast.success(`${data.deleted} feedback borttagna.`);
             load();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -93,6 +110,21 @@ export default function Feedback() {
                 </Button>
             </div>
 
+            {items.length > 0 && (
+                <div className="mb-4">
+                    <label className="flex items-center gap-2 text-sm">
+                        <SelectAllCheckbox
+                            allSelected={bulk.allSelected}
+                            someSelected={bulk.someSelected}
+                            onToggle={bulk.toggleAll}
+                        />
+                        <span className="text-muted-foreground">
+                            Markera alla ({items.length})
+                        </span>
+                    </label>
+                </div>
+            )}
+
             {loading && (
                 <div className="surface p-10 text-center text-muted-foreground">
                     Laddar…
@@ -104,15 +136,22 @@ export default function Feedback() {
                     Ingen feedback än.
                 </div>
             )}
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-4 pb-24">
                 {items.map((f) => (
                     <div
                         key={f.id}
-                        className="surface p-5 fade-in"
+                        className={`surface p-5 fade-in ${bulk.isSelected(f.id) ? "ring-2 ring-primary" : ""}`}
                         data-testid={`feedback-${f.id}`}
                     >
                         <div className="flex items-start justify-between gap-3 mb-3">
-                            <Stars n={f.rating} />
+                            <div className="flex items-center gap-3">
+                                <Checkbox
+                                    checked={bulk.isSelected(f.id)}
+                                    onCheckedChange={() => bulk.toggle(f.id)}
+                                    data-testid={`bulk-select-row-${f.id}`}
+                                />
+                                <Stars n={f.rating} />
+                            </div>
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -163,6 +202,22 @@ export default function Feedback() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="feedback"
+                actions={[
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} feedback tas bort permanent.`,
+                        onRun: runBulkDelete,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

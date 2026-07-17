@@ -38,6 +38,9 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -80,6 +83,7 @@ export default function RegisteredBirds() {
     const [status, setStatus] = useState("all");
     const [editing, setEditing] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
@@ -89,6 +93,7 @@ export default function RegisteredBirds() {
             if (status !== "all") params.payment_status = status;
             const { data } = await api.get("/admin/registered-birds", { params });
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -119,6 +124,18 @@ export default function RegisteredBirds() {
             await api.patch(`/admin/registered-birds/${id}`, updates);
             toast.success("Uppdaterad.");
             setEditing(null);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
+    const runBulkDelete = async () => {
+        try {
+            const { data } = await api.post("/admin/registered-birds/bulk-delete", {
+                ids: bulk.selectedIds,
+            });
+            toast.success(`${data.deleted} fåglar borttagna.`);
             load();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -184,6 +201,13 @@ export default function RegisteredBirds() {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-10">
+                                <SelectAllCheckbox
+                                    allSelected={bulk.allSelected}
+                                    someSelected={bulk.someSelected}
+                                    onToggle={bulk.toggleAll}
+                                />
+                            </TableHead>
                             <TableHead>Art</TableHead>
                             <TableHead>Ringnr</TableHead>
                             <TableHead>Ägare</TableHead>
@@ -197,7 +221,7 @@ export default function RegisteredBirds() {
                         {loading && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={7}
+                                    colSpan={8}
                                     className="text-center py-10 text-muted-foreground"
                                 >
                                     Laddar…
@@ -207,7 +231,7 @@ export default function RegisteredBirds() {
                         {!loading && items.length === 0 && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={7}
+                                    colSpan={8}
                                     className="text-center py-10 text-muted-foreground"
                                 >
                                     <Bird
@@ -224,7 +248,15 @@ export default function RegisteredBirds() {
                                 <TableRow
                                     key={b.id}
                                     data-testid={`row-bird-${b.id}`}
+                                    data-state={bulk.isSelected(b.id) ? "selected" : undefined}
                                 >
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={bulk.isSelected(b.id)}
+                                            onCheckedChange={() => bulk.toggle(b.id)}
+                                            data-testid={`bulk-select-row-${b.id}`}
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-medium">
                                         {b.species}
                                     </TableCell>
@@ -422,6 +454,22 @@ export default function RegisteredBirds() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="fåglar"
+                actions={[
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} fåglar tas bort permanent. Detta går inte att ångra.`,
+                        onRun: runBulkDelete,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

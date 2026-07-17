@@ -19,6 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Select,
     SelectContent,
@@ -47,14 +50,19 @@ import {
 
 const EMPTY = { label: "", url: "", parent_id: "none", is_visible: true };
 
-function ItemRow({ item, index, siblings, isChild, onEdit, onDelete, onToggleVisible, onMove }) {
+function ItemRow({ item, index, siblings, isChild, onEdit, onDelete, onToggleVisible, onMove, selected, onToggleSelect }) {
     const total = siblings.length;
     return (
         <div
-            className={`rounded-md border transition-colors ${isChild ? "border-border/60 bg-muted/30 ml-8" : "border-border bg-card"}`}
+            className={`rounded-md border transition-colors ${isChild ? "border-border/60 bg-muted/30 ml-8" : "border-border bg-card"} ${selected ? "ring-2 ring-primary" : ""}`}
             data-testid={`menu-item-${item.id}`}
         >
             <div className="p-3 flex items-center gap-3">
+                <Checkbox
+                    checked={selected}
+                    onCheckedChange={onToggleSelect}
+                    data-testid={`bulk-select-row-${item.id}`}
+                />
                 {isChild && (
                     <CaretRight
                         size={14}
@@ -139,12 +147,14 @@ export default function AdminMenu() {
     const [dialog, setDialog] = useState(null); // 'new' | 'edit'
     const [form, setForm] = useState(EMPTY);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
         try {
             const { data } = await api.get("/admin/menu");
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -252,6 +262,18 @@ export default function AdminMenu() {
         }
     };
 
+    const runBulkDelete = async () => {
+        try {
+            const { data } = await api.post("/admin/menu/bulk-delete", {
+                ids: bulk.selectedIds,
+            });
+            toast.success(`${data.deleted} menyval borttagna.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
     // Available parent options (only top-level items that don't have parent themselves)
     const topLevelOptions = items.filter((i) => !i.parent_id);
 
@@ -309,6 +331,8 @@ export default function AdminMenu() {
                                     onDelete={setConfirmDelete}
                                     onToggleVisible={toggleVisible}
                                     onMove={move}
+                                    selected={bulk.isSelected(top.id)}
+                                    onToggleSelect={() => bulk.toggle(top.id)}
                                 />
                                 <div className="space-y-1.5">
                                     {top.children.map((c, cIdx) => (
@@ -322,6 +346,8 @@ export default function AdminMenu() {
                                             onDelete={setConfirmDelete}
                                             onToggleVisible={toggleVisible}
                                             onMove={move}
+                                            selected={bulk.isSelected(c.id)}
+                                            onToggleSelect={() => bulk.toggle(c.id)}
                                         />
                                     ))}
                                     <div className="ml-8">
@@ -443,6 +469,22 @@ export default function AdminMenu() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="menyval"
+                actions={[
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} menyval tas bort permanent. Barnval av dessa kopplas loss.`,
+                        onRun: runBulkDelete,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Mail } from "lucide-react";
+import { EnvelopeSimple } from "@phosphor-icons/react";
 import api from "@/lib/api";
 
 export default function PublicFooter() {
@@ -32,14 +32,14 @@ export default function PublicFooter() {
                                 className="h-28 w-auto transition-transform group-hover:scale-105"
                             />
                         </Link>
-                        <a
-                            href="mailto:info@fagelregister.se"
+                        <Link
+                            to="/kontakt"
                             data-testid="footer-contact-button"
                             className="inline-flex items-center gap-3 px-8 py-5 text-lg font-semibold rounded-xl bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:opacity-90 transition-all"
                         >
-                            <Mail className="w-6 h-6" />
+                            <EnvelopeSimple size={24} weight="duotone" />
                             Kontakta oss
-                        </a>
+                        </Link>
                     </div>
 
                     {/* Right column: page links */}

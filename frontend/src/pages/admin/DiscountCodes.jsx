@@ -16,6 +16,9 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Dialog,
     DialogContent,
@@ -49,12 +52,14 @@ export default function DiscountCodes() {
     const [dialog, setDialog] = useState(null); // 'new' | code obj
     const [form, setForm] = useState(EMPTY);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
         try {
             const { data } = await api.get("/admin/discount-codes");
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -129,6 +134,18 @@ export default function DiscountCodes() {
         }
     };
 
+    const runBulkDelete = async () => {
+        try {
+            const { data } = await api.post("/admin/discount-codes/bulk-delete", {
+                ids: bulk.selectedIds,
+            });
+            toast.success(`${data.deleted} rabattkod(er) borttagna.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
     return (
         <AdminLayout>
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -151,6 +168,13 @@ export default function DiscountCodes() {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-10">
+                                <SelectAllCheckbox
+                                    allSelected={bulk.allSelected}
+                                    someSelected={bulk.someSelected}
+                                    onToggle={bulk.toggleAll}
+                                />
+                            </TableHead>
                             <TableHead>Kod</TableHead>
                             <TableHead>Rabatt</TableHead>
                             <TableHead>Utgår</TableHead>
@@ -162,14 +186,14 @@ export default function DiscountCodes() {
                     <TableBody>
                         {loading && (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                     Laddar…
                                 </TableCell>
                             </TableRow>
                         )}
                         {!loading && items.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                     <TicketIcon size={28} weight="duotone" className="mx-auto mb-2" />
                                     Inga rabattkoder skapade än.
                                 </TableCell>
@@ -180,7 +204,15 @@ export default function DiscountCodes() {
                                 <TableRow
                                     key={c.id}
                                     data-testid={`row-discount-${c.id}`}
+                                    data-state={bulk.isSelected(c.id) ? "selected" : undefined}
                                 >
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={bulk.isSelected(c.id)}
+                                            onCheckedChange={() => bulk.toggle(c.id)}
+                                            data-testid={`bulk-select-row-${c.id}`}
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-mono font-semibold">
                                         {c.code}
                                     </TableCell>
@@ -341,6 +373,22 @@ export default function DiscountCodes() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="rabattkoder"
+                actions={[
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} rabattkod(er) tas bort permanent.`,
+                        onRun: runBulkDelete,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

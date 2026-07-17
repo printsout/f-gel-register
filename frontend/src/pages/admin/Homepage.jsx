@@ -24,6 +24,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Select,
     SelectContent,
@@ -58,19 +61,28 @@ const SECTION_META = {
     cta_banner: { label: "CTA-banner", icon: ImageSquare },
 };
 
-function SectionListItem({ section, index, total, active, onSelect, onToggleVisible, onMove, onDuplicate, onDelete }) {
+function SectionListItem({ section, index, total, active, onSelect, onToggleVisible, onMove, onDuplicate, onDelete, selected, onToggleSelect }) {
     const Icon = SECTION_META[section.type]?.icon || Rows;
     return (
         <div
             className={`rounded-md border transition-colors cursor-pointer ${
                 active
                     ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 bg-card"
+                    : selected
+                      ? "border-primary/40 bg-primary/5"
+                      : "border-border hover:border-border/80 bg-card"
             }`}
             onClick={onSelect}
             data-testid={`section-item-${section.id}`}
         >
             <div className="p-3 flex items-center gap-3">
+                <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                        checked={selected}
+                        onCheckedChange={onToggleSelect}
+                        data-testid={`bulk-select-row-${section.id}`}
+                    />
+                </div>
                 <span className="text-sm font-mono text-muted-foreground w-4 flex-shrink-0">
                     {index + 1}
                 </span>
@@ -310,6 +322,7 @@ export default function AdminHomepage() {
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const bulk = useBulkSelection(sections);
 
     const selected = sections.find((s) => s.id === selectedId);
 
@@ -320,6 +333,7 @@ export default function AdminHomepage() {
             setSections(data);
             if (data.length && !selectedId) setSelectedId(data[0].id);
             setDirty(false);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -429,6 +443,22 @@ export default function AdminHomepage() {
         }
     };
 
+    const runBulk = async (action) => {
+        try {
+            const { data } = await api.post("/admin/homepage/bulk", {
+                ids: bulk.selectedIds,
+                action,
+            });
+            const n = data.deleted ?? data.updated ?? bulk.selectedIds.length;
+            const label =
+                action === "delete" ? "borttagna" : action === "show" ? "visade" : "dolda";
+            toast.success(`${n} sektion(er) ${label}.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
     return (
         <AdminLayout>
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -460,9 +490,23 @@ export default function AdminHomepage() {
                             <p className="font-display font-bold text-lg">
                                 Sektioner ({sections.length})
                             </p>
-                            <Button size="sm" onClick={() => setAddOpen(true)} data-testid="button-add-section">
-                                <Plus size={14} className="mr-1.5" /> Lägg till
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                {sections.length > 0 && (
+                                    <label className="flex items-center gap-1.5 text-xs">
+                                        <SelectAllCheckbox
+                                            allSelected={bulk.allSelected}
+                                            someSelected={bulk.someSelected}
+                                            onToggle={bulk.toggleAll}
+                                        />
+                                        <span className="text-muted-foreground">
+                                            Alla
+                                        </span>
+                                    </label>
+                                )}
+                                <Button size="sm" onClick={() => setAddOpen(true)} data-testid="button-add-section">
+                                    <Plus size={14} className="mr-1.5" /> Lägg till
+                                </Button>
+                            </div>
                         </div>
                         <div className="space-y-2">
                             {sections.map((s, i) => (
@@ -472,6 +516,8 @@ export default function AdminHomepage() {
                                     index={i}
                                     total={sections.length}
                                     active={s.id === selectedId}
+                                    selected={bulk.isSelected(s.id)}
+                                    onToggleSelect={() => bulk.toggle(s.id)}
                                     onSelect={() => setSelectedId(s.id)}
                                     onToggleVisible={() => toggleVisible(s)}
                                     onMove={(delta) => move(s, delta)}
@@ -623,6 +669,37 @@ export default function AdminHomepage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="sektioner"
+                actions={[
+                    {
+                        key: "show",
+                        label: "Visa",
+                        icon: <Eye size={14} />,
+                        tone: "success",
+                        confirm: `Visa ${bulk.count} sektion(er) på startsidan?`,
+                        onRun: () => runBulk("show"),
+                    },
+                    {
+                        key: "hide",
+                        label: "Dölj",
+                        icon: <EyeSlash size={14} />,
+                        confirm: `Dölj ${bulk.count} sektion(er) från startsidan?`,
+                        onRun: () => runBulk("hide"),
+                    },
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} sektion(er) tas bort permanent.`,
+                        onRun: () => runBulk("delete"),
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

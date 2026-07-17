@@ -4,6 +4,9 @@ import { ChatCircleDots, Trash } from "@phosphor-icons/react";
 import AdminLayout from "@/components/AdminLayout";
 import api, { formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,12 +22,14 @@ export default function Comments() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
         try {
             const { data } = await api.get("/admin/comments");
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -46,16 +51,42 @@ export default function Comments() {
         }
     };
 
+    const runBulkDelete = async () => {
+        try {
+            const { data } = await api.post("/admin/comments/bulk-delete", {
+                ids: bulk.selectedIds,
+            });
+            toast.success(`${data.deleted} kommentar(er) borttagna.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
     return (
         <AdminLayout>
-            <div className="mb-8">
-                <p className="label-caps mb-2">Moderering</p>
-                <h1 className="text-3xl md:text-4xl font-display font-bold">
-                    Kommentarer
-                </h1>
-                <p className="text-muted-foreground mt-1">
-                    {items.length} kommentarer
-                </p>
+            <div className="mb-8 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <p className="label-caps mb-2">Moderering</p>
+                    <h1 className="text-3xl md:text-4xl font-display font-bold">
+                        Kommentarer
+                    </h1>
+                    <p className="text-muted-foreground mt-1">
+                        {items.length} kommentarer
+                    </p>
+                </div>
+                {items.length > 0 && (
+                    <label className="flex items-center gap-2 text-sm">
+                        <SelectAllCheckbox
+                            allSelected={bulk.allSelected}
+                            someSelected={bulk.someSelected}
+                            onToggle={bulk.toggleAll}
+                        />
+                        <span className="text-muted-foreground">
+                            Markera alla ({items.length})
+                        </span>
+                    </label>
+                )}
             </div>
 
             {loading && (
@@ -74,13 +105,19 @@ export default function Comments() {
                 </div>
             )}
 
-            <div className="space-y-3">
+            <div className="space-y-3 pb-24">
                 {items.map((c) => (
                     <div
                         key={c.id}
-                        className="surface p-4 flex items-start gap-4 fade-in"
+                        className={`surface p-4 flex items-start gap-4 fade-in ${bulk.isSelected(c.id) ? "ring-2 ring-primary" : ""}`}
                         data-testid={`comment-${c.id}`}
                     >
+                        <Checkbox
+                            checked={bulk.isSelected(c.id)}
+                            onCheckedChange={() => bulk.toggle(c.id)}
+                            className="mt-2"
+                            data-testid={`bulk-select-row-${c.id}`}
+                        />
                         <div
                             className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-display font-bold text-white"
                             style={{ background: "hsl(var(--primary))" }}
@@ -142,6 +179,22 @@ export default function Comments() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="kommentarer"
+                actions={[
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} kommentar(er) tas bort permanent.`,
+                        onRun: runBulkDelete,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

@@ -15,6 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Tabs,
     TabsList,
@@ -68,10 +71,21 @@ function StatusBadge({ status }) {
     );
 }
 
-function PostCard({ post, onApprove, onReject, onDelete }) {
+function PostCard({ post, onApprove, onReject, onDelete, selected, onToggleSelect }) {
     return (
-        <div className="surface p-5 fade-in" data-testid={`admin-post-${post.id}`}>
-            <div className="flex items-start justify-between gap-3 mb-3">
+        <div
+            className={`surface p-5 fade-in relative ${selected ? "ring-2 ring-primary" : ""}`}
+            data-testid={`admin-post-${post.id}`}
+        >
+            <div className="absolute top-4 left-4">
+                <Checkbox
+                    checked={selected}
+                    onCheckedChange={onToggleSelect}
+                    data-testid={`bulk-select-row-${post.id}`}
+                    aria-label="Markera inlägg"
+                />
+            </div>
+            <div className="flex items-start justify-between gap-3 mb-3 pl-8">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-2">
                         <StatusBadge status={post.status} />
@@ -160,6 +174,9 @@ export default function AdminPosts() {
     const [rejecting, setRejecting] = useState(null);
     const [rejectReason, setRejectReason] = useState("");
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const [bulkReject, setBulkReject] = useState(false);
+    const [bulkRejectReason, setBulkRejectReason] = useState("");
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
@@ -168,6 +185,7 @@ export default function AdminPosts() {
                 params: status === "all" ? {} : { status },
             });
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -215,6 +233,47 @@ export default function AdminPosts() {
         }
     };
 
+    const runBulk = async (action, extra = {}) => {
+        try {
+            const { data } = await api.post("/admin/posts/bulk", {
+                ids: bulk.selectedIds,
+                action,
+                ...extra,
+            });
+            const n = data.deleted ?? data.updated ?? bulk.selectedIds.length;
+            toast.success(`${n} inlägg ${action === "delete" ? "borttagna" : action === "approve" ? "godkända" : "avvisade"}.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
+    const bulkActions = [
+        {
+            key: "approve",
+            label: "Godkänn",
+            icon: <CheckCircle size={14} />,
+            tone: "success",
+            confirm: `Godkänn ${bulk.count} inlägg och publicera dem i galleriet?`,
+            onRun: () => runBulk("approve"),
+        },
+        {
+            key: "reject",
+            label: "Avvisa",
+            icon: <XCircle size={14} />,
+            confirm: null,
+            onRun: () => setBulkReject(true),
+        },
+        {
+            key: "delete",
+            label: "Ta bort",
+            icon: <Trash size={14} />,
+            tone: "destructive",
+            confirm: `${bulk.count} inlägg tas bort permanent.`,
+            onRun: () => runBulk("delete"),
+        },
+    ];
+
     return (
         <AdminLayout>
             <div className="mb-8">
@@ -227,22 +286,36 @@ export default function AdminPosts() {
                 </p>
             </div>
 
-            <Tabs value={status} onValueChange={setStatus} className="mb-6">
-                <TabsList data-testid="posts-status-tabs">
-                    <TabsTrigger value="pending" data-testid="tab-pending">
-                        Väntande
-                    </TabsTrigger>
-                    <TabsTrigger value="approved" data-testid="tab-approved">
-                        Publicerade
-                    </TabsTrigger>
-                    <TabsTrigger value="rejected" data-testid="tab-rejected">
-                        Avvisade
-                    </TabsTrigger>
-                    <TabsTrigger value="all" data-testid="tab-all">
-                        Alla
-                    </TabsTrigger>
-                </TabsList>
-            </Tabs>
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                <Tabs value={status} onValueChange={setStatus}>
+                    <TabsList data-testid="posts-status-tabs">
+                        <TabsTrigger value="pending" data-testid="tab-pending">
+                            Väntande
+                        </TabsTrigger>
+                        <TabsTrigger value="approved" data-testid="tab-approved">
+                            Publicerade
+                        </TabsTrigger>
+                        <TabsTrigger value="rejected" data-testid="tab-rejected">
+                            Avvisade
+                        </TabsTrigger>
+                        <TabsTrigger value="all" data-testid="tab-all">
+                            Alla
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+                {items.length > 0 && (
+                    <label className="flex items-center gap-2 text-sm">
+                        <SelectAllCheckbox
+                            allSelected={bulk.allSelected}
+                            someSelected={bulk.someSelected}
+                            onToggle={bulk.toggleAll}
+                        />
+                        <span className="text-muted-foreground">
+                            Markera alla ({items.length})
+                        </span>
+                    </label>
+                )}
+            </div>
 
             {loading && (
                 <div className="surface p-10 text-center text-muted-foreground">Laddar…</div>
@@ -254,11 +327,13 @@ export default function AdminPosts() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-24">
                 {items.map((p) => (
                     <PostCard
                         key={p.id}
                         post={p}
+                        selected={bulk.isSelected(p.id)}
+                        onToggleSelect={() => bulk.toggle(p.id)}
                         onApprove={approve}
                         onReject={(post) => {
                             setRejecting(post);
@@ -268,6 +343,13 @@ export default function AdminPosts() {
                     />
                 ))}
             </div>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                actions={bulkActions}
+                entityName="inlägg"
+            />
 
             <Dialog open={!!rejecting} onOpenChange={(v) => !v && setRejecting(null)}>
                 <DialogContent>
@@ -298,6 +380,44 @@ export default function AdminPosts() {
                             data-testid="button-submit-reject"
                         >
                             Avvisa
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk reject dialog */}
+            <Dialog open={bulkReject} onOpenChange={(v) => !v && setBulkReject(false)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Avvisa {bulk.count} inlägg</DialogTitle>
+                        <DialogDescription>
+                            Anledningen visas för alla berörda användare.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="bulk-reason">Anledning (valfritt)</Label>
+                        <Textarea
+                            id="bulk-reason"
+                            rows={4}
+                            value={bulkRejectReason}
+                            onChange={(e) => setBulkRejectReason(e.target.value)}
+                            data-testid="input-bulk-reject-reason"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setBulkReject(false)}>
+                            Avbryt
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={async () => {
+                                await runBulk("reject", { reason: bulkRejectReason.trim() || null });
+                                setBulkReject(false);
+                                setBulkRejectReason("");
+                            }}
+                            data-testid="button-bulk-reject-submit"
+                        >
+                            Avvisa {bulk.count}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

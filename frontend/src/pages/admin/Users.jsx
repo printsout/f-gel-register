@@ -37,6 +37,9 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -57,6 +60,7 @@ export default function Users() {
     const [detail, setDetail] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [loading, setLoading] = useState(true);
+    const bulk = useBulkSelection(items, (u) => u.user_id);
 
     const load = async () => {
         setLoading(true);
@@ -67,6 +71,7 @@ export default function Users() {
             if (blocked !== "all") params.is_blocked = blocked === "yes";
             const { data } = await api.get("/admin/users", { params });
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -114,6 +119,26 @@ export default function Users() {
             await api.delete(`/admin/users/${confirmDelete.user_id}`);
             toast.success("Användare borttagen");
             setConfirmDelete(null);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
+    const runBulk = async (action) => {
+        try {
+            const { data } = await api.post("/admin/users/bulk", {
+                ids: bulk.selectedIds,
+                action,
+            });
+            const n = data.deleted ?? data.updated ?? bulk.selectedIds.length;
+            const label =
+                action === "delete"
+                    ? "borttagna"
+                    : action === "block"
+                      ? "blockerade"
+                      : "avblockerade";
+            toast.success(`${n} användare ${label}.`);
             load();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -184,6 +209,13 @@ export default function Users() {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-10">
+                                <SelectAllCheckbox
+                                    allSelected={bulk.allSelected}
+                                    someSelected={bulk.someSelected}
+                                    onToggle={bulk.toggleAll}
+                                />
+                            </TableHead>
                             <TableHead>Namn</TableHead>
                             <TableHead>E-post</TableHead>
                             <TableHead>Roll</TableHead>
@@ -196,14 +228,14 @@ export default function Users() {
                     <TableBody>
                         {loading && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                                     Laddar…
                                 </TableCell>
                             </TableRow>
                         )}
                         {!loading && items.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                                     <UsersThree
                                         size={28}
                                         weight="duotone"
@@ -218,7 +250,16 @@ export default function Users() {
                                 <TableRow
                                     key={u.user_id}
                                     data-testid={`row-user-${u.user_id}`}
+                                    data-state={bulk.isSelected(u.user_id) ? "selected" : undefined}
                                 >
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={bulk.isSelected(u.user_id)}
+                                            onCheckedChange={() => bulk.toggle(u.user_id)}
+                                            disabled={u.user_id === me.user_id}
+                                            data-testid={`bulk-select-row-${u.user_id}`}
+                                        />
+                                    </TableCell>
                                     <TableCell className="font-medium">
                                         {u.first_name || u.last_name
                                             ? `${u.first_name || ""} ${u.last_name || ""}`.trim()
@@ -373,6 +414,37 @@ export default function Users() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="användare"
+                actions={[
+                    {
+                        key: "block",
+                        label: "Blockera",
+                        icon: <Shield size={14} />,
+                        confirm: `Blockera ${bulk.count} användare? De kan inte logga in tills de avblockeras.`,
+                        onRun: () => runBulk("block"),
+                    },
+                    {
+                        key: "unblock",
+                        label: "Avblockera",
+                        icon: <ShieldSlash size={14} />,
+                        tone: "success",
+                        confirm: `Avblockera ${bulk.count} användare?`,
+                        onRun: () => runBulk("unblock"),
+                    },
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} användare tas bort permanent. Deras fåglar behålls men kopplas loss.`,
+                        onRun: () => runBulk("delete"),
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

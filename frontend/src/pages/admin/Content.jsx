@@ -17,6 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Dialog,
     DialogContent,
@@ -56,12 +59,14 @@ export default function AdminContent() {
     const [form, setForm] = useState(EMPTY);
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
         try {
             const { data } = await api.get("/admin/content");
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -139,6 +144,18 @@ export default function AdminContent() {
         }
     };
 
+    const runBulkDelete = async () => {
+        try {
+            const { data } = await api.post("/admin/content/bulk-delete", {
+                ids: bulk.selectedIds,
+            });
+            toast.success(`${data.deleted} sida/sidor borttagna.`);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
     return (
         <AdminLayout>
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -157,10 +174,20 @@ export default function AdminContent() {
             </div>
 
             <div className="surface overflow-hidden">
-                <div className="px-5 py-4 border-b border-border">
+                <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
                     <p className="font-display font-bold text-lg">
                         Sidor ({items.length})
                     </p>
+                    {items.length > 0 && (
+                        <label className="flex items-center gap-2 text-sm">
+                            <SelectAllCheckbox
+                                allSelected={bulk.allSelected}
+                                someSelected={bulk.someSelected}
+                                onToggle={bulk.toggleAll}
+                            />
+                            <span className="text-muted-foreground">Markera alla</span>
+                        </label>
+                    )}
                 </div>
 
                 {loading && (
@@ -177,9 +204,14 @@ export default function AdminContent() {
                     {items.map((p) => (
                         <li
                             key={p.id}
-                            className="p-5 flex items-center gap-4 hover:bg-muted/30 transition-colors"
+                            className={`p-5 flex items-center gap-4 hover:bg-muted/30 transition-colors ${bulk.isSelected(p.id) ? "bg-primary/5" : ""}`}
                             data-testid={`content-row-${p.id}`}
                         >
+                            <Checkbox
+                                checked={bulk.isSelected(p.id)}
+                                onCheckedChange={() => bulk.toggle(p.id)}
+                                data-testid={`bulk-select-row-${p.id}`}
+                            />
                             <div
                                 className="w-11 h-11 rounded-md flex items-center justify-center flex-shrink-0"
                                 style={{ background: "hsl(var(--muted))" }}
@@ -377,6 +409,22 @@ export default function AdminContent() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="sidor"
+                actions={[
+                    {
+                        key: "delete",
+                        label: "Ta bort",
+                        icon: <Trash size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} sida/sidor tas bort permanent.`,
+                        onRun: runBulkDelete,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }

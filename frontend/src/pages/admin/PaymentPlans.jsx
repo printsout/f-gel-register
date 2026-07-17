@@ -14,6 +14,9 @@ import api, { API, formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 import {
     Tabs,
     TabsList,
@@ -60,6 +63,7 @@ export default function AdminPaymentPlans() {
     const [q, setQ] = useState("");
     const [loading, setLoading] = useState(true);
     const [confirmCancel, setConfirmCancel] = useState(null);
+    const bulk = useBulkSelection(items);
 
     const load = async () => {
         setLoading(true);
@@ -69,6 +73,7 @@ export default function AdminPaymentPlans() {
             if (q) params.search = q;
             const { data } = await api.get("/admin/payment-plans", { params });
             setItems(data);
+            bulk.clear();
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -96,6 +101,19 @@ export default function AdminPaymentPlans() {
             await api.post(`/admin/payment-plans/${confirmCancel.id}/cancel`);
             toast.success("Plan avslutad.");
             setConfirmCancel(null);
+            load();
+        } catch (e) {
+            toast.error(formatApiError(e));
+        }
+    };
+
+    const runBulkCancel = async () => {
+        try {
+            const { data } = await api.post("/admin/payment-plans/bulk-cancel", {
+                ids: bulk.selectedIds,
+            });
+            const n = data.updated ?? bulk.selectedIds.length;
+            toast.success(`${n} betalningsplan(er) avslutade.`);
             load();
         } catch (e) {
             toast.error(formatApiError(e));
@@ -152,6 +170,13 @@ export default function AdminPaymentPlans() {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-10">
+                                <SelectAllCheckbox
+                                    allSelected={bulk.allSelected}
+                                    someSelected={bulk.someSelected}
+                                    onToggle={bulk.toggleAll}
+                                />
+                            </TableHead>
                             <TableHead>Ägare (e-post)</TableHead>
                             <TableHead>Ringnr</TableHead>
                             <TableHead>Startdatum</TableHead>
@@ -164,14 +189,14 @@ export default function AdminPaymentPlans() {
                     <TableBody>
                         {loading && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                                     Laddar…
                                 </TableCell>
                             </TableRow>
                         )}
                         {!loading && items.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                                     <CurrencyCircleDollar size={28} weight="duotone" className="mx-auto mb-2" />
                                     Inga betalningsplaner ännu.
                                 </TableCell>
@@ -179,7 +204,18 @@ export default function AdminPaymentPlans() {
                         )}
                         {!loading &&
                             items.map((p) => (
-                                <TableRow key={p.id} data-testid={`plan-row-${p.id}`}>
+                                <TableRow
+                                    key={p.id}
+                                    data-testid={`plan-row-${p.id}`}
+                                    data-state={bulk.isSelected(p.id) ? "selected" : undefined}
+                                >
+                                    <TableCell>
+                                        <Checkbox
+                                            checked={bulk.isSelected(p.id)}
+                                            onCheckedChange={() => bulk.toggle(p.id)}
+                                            data-testid={`bulk-select-row-${p.id}`}
+                                        />
+                                    </TableCell>
                                     <TableCell className="text-sm">{p.user_email || "—"}</TableCell>
                                     <TableCell className="font-mono text-xs">{p.ring_number}</TableCell>
                                     <TableCell className="text-sm">{p.start_date}</TableCell>
@@ -238,6 +274,22 @@ export default function AdminPaymentPlans() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <BulkActionsBar
+                count={bulk.count}
+                onClear={bulk.clear}
+                entityName="betalningsplaner"
+                actions={[
+                    {
+                        key: "cancel",
+                        label: "Avsluta",
+                        icon: <XCircle size={14} />,
+                        tone: "destructive",
+                        confirm: `${bulk.count} betalningsplan(er) markeras som avslutade. Ingen mer årsavgift debiteras.`,
+                        onRun: runBulkCancel,
+                    },
+                ]}
+            />
         </AdminLayout>
     );
 }
