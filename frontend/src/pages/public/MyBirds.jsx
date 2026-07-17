@@ -18,6 +18,7 @@ import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Loader } from "@/components/ProtectedRoute";
 import PublicFooter from "@/components/PublicFooter";
+import BackHeader from "@/components/BackHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -418,18 +419,7 @@ export default function MyPosts() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card">
-                <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <Link
-                        to="/"
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                        data-testid="link-back-home"
-                    >
-                        <ArrowLeft size={16} /> Tillbaka
-                    </Link>
-                    <span className="label-caps">Mina inlägg</span>
-                </div>
-            </header>
+            <BackHeader label="Mina inlägg" />
 
             <div className="max-w-5xl mx-auto px-6 py-10">
                 <div className="mb-8 flex flex-wrap justify-between items-end gap-4">

@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 11 — Frontend-only verification of shared BackHeader component across 7 public sub-pages plus regression on register-bird and report-missing flows. All acceptance criteria pass: (a) each of /registrera-fagel, /rapportera-hittad, /rapportera-bortflygen, /hittade-faglar, /galleri, /sidor/om-oss and (auth) /mina-faglar renders <header data-testid='back-header'> with a working Tillbaka link, centered clickable logo image, and uppercase label; (b) 'link-back-home' and 'back-header-logo' both navigate to /, verified via click on /registrera-fagel and /galleri and /mina-faglar; (c) /images/fagelregister-logo.png loads with naturalWidth=1254 in every case (both BackHeader logo and PublicFooter logo); (d) landing / does NOT render BackHeader (uses PublicHeader) — confirmed; (e) regression register-bird flow: species combobox picks 'Ara – Blå och gul (Ara ararauna)', ring FR-2026-TEST-QZALL, owner 'X Test', phone '0701234567', GDPR checkbox accepted → POST /api/registered-birds → 200, sonner toast 'Fågel registrerad! Se den i galleriet.' shown and navigated to /galleri; (f) regression report-missing flow: SpeciesSelect + phone/email + description + location + date fill → POST /api/missing-birds → 200, success dialog 'Rapporten är skickad' shown; (g) authenticated /mina-faglar via test@papegojregistret.se / Test123! renders BackHeader with 'MINA INLÄGG' label.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BackHeader label on narrow viewports / long labels", "issues": ["'RAPPORTERA BORTFLÖGEN FÅGEL' is truncated to 'RAPPORTERA BORTFL…' on desktop (1440px) because BackHeader.jsx caps the right-side label at max-w-[180px] with truncate. Full text visible only via tooltip/hover if any. Consider raising the max-width or hiding label on mobile only.", "Also note the Swedish spelling in the label is 'bortflögen' — normal Swedish would be 'bortflugen'; consistent across the codebase so left as-is per iteration scope, but worth confirming with product."]},
+      {"screen": "/rapportera-bortflygen date field", "issues": ["Uses native <input type='date'> instead of the shadcn Calendar/Popover component used elsewhere in admin. Minor consistency issue, not raised by this iteration but noted for future polish."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: consider widening or wrapping the BackHeader label so 'RAPPORTERA BORTFLÖGEN FÅGEL' is not truncated on desktop, or hide the label below a breakpoint instead of truncating it."
+  ],
+  "critical_code_review_comments": [
+    "BackHeader.jsx uses sticky top-0 z-30. RegisterBird species combobox popover rendered above it correctly; no z-index conflict observed.",
+    "back-header-logo <Link to='/'> wraps only the <img>, so click surface equals image size — good, and image has alt='Fågelregister' for a11y.",
+    "Reused component pattern is clean and reduces duplication across 7 pages. All previously inline back headers were replaced consistently.",
+    "Label uses .label-caps class which upper-cases via CSS (verified: input 'Om oss' rendered as 'OM OSS'). This means the label prop can be passed in normal case for i18n friendliness."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per request)", "frontend": "100% — 7/7 pages BackHeader verified, 2/2 regression submit flows passed, 3/3 navigation flows (logo & back-link) verified, landing check passed"},
+  "test_credentials": "test@papegojregistret.se / Test123! — verified login working via POST /api/auth/login (redirects to / with cookies set).",
+  "seed_data_creation": "One TEST bird registered via /registrera-fagel with ring 'FR-2026-TEST-QZALL' (owner 'X Test') and one TEST missing-bird report ('TEST Missing Owner', ring 'TESTRING123'). Both flow-verification artefacts; safe to leave or clean up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "BackHeader component and all 7 consumer pages are verified. If future changes touch BackHeader.jsx or any of the 7 pages (RegisterBird, ReportFound, ReportMissing, FoundBirdsList, Gallery, MyBirds, ContentPage), rerun by (1) navigating each public sub-page and querying [data-testid='back-header'], (2) verifying img naturalWidth > 0 on '[data-testid=\"back-header-logo\"] img' and (3) clicking both link-back-home and back-header-logo and asserting URL === '/'. Auth-only page /mina-faglar requires prior POST /api/auth/login via inputs input-email / input-password / button-submit-auth on /login."
+}

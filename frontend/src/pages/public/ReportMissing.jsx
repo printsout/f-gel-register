@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import PublicFooter from "@/components/PublicFooter";
 import SpeciesSelect from "@/components/SpeciesSelect";
+import BackHeader from "@/components/BackHeader";
 
 export default function ReportMissing() {
     const navigate = useNavigate();
@@ -59,19 +60,7 @@ export default function ReportMissing() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card">
-                <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <Link
-                        to="/"
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                        data-testid="link-back-home"
-                    >
-                        <ArrowLeft size={16} />
-                        Tillbaka
-                    </Link>
-                    <span className="label-caps">Rapportera bortflögen fågel</span>
-                </div>
-            </header>
+            <BackHeader label="Rapportera bortflögen fågel" />
             <div className="max-w-2xl mx-auto px-6 py-10">
                 <div className="mb-6 flex items-start gap-3">
                     <div

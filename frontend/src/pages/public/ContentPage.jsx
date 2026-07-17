@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Feather } from "@phosphor-icons/react";
 import api from "@/lib/api";
 import PublicFooter from "@/components/PublicFooter";
+import BackHeader from "@/components/BackHeader";
 
 // Simple, safe Markdown renderer for our CMS content.
 // Supports: # / ## / ### headings, **bold**, *italic*, [link](url),
@@ -109,21 +110,7 @@ export default function ContentPage() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card">
-                <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <Link
-                        to="/"
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                        data-testid="link-back-home"
-                    >
-                        <ArrowLeft size={16} /> Tillbaka
-                    </Link>
-                    <div className="flex items-center gap-2 text-sm">
-                        <Feather size={16} weight="duotone" className="text-primary" />
-                        <span className="font-display font-bold">Fågelregister</span>
-                    </div>
-                </div>
-            </header>
+            <BackHeader label={page?.title || "Sida"} />
 
             <article className="max-w-3xl mx-auto px-6 py-10 fade-in" data-testid={`content-page-${slug}`}>
                 {loading && (

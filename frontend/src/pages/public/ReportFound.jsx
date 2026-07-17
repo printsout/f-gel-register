@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import PublicFooter from "@/components/PublicFooter";
+import BackHeader from "@/components/BackHeader";
 
 export default function ReportFound() {
     const navigate = useNavigate();
@@ -37,19 +38,7 @@ export default function ReportFound() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card">
-                <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <Link
-                        to="/"
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                        data-testid="link-back-home"
-                    >
-                        <ArrowLeft size={16} />
-                        Tillbaka
-                    </Link>
-                    <span className="label-caps">Rapportera hittad fågel</span>
-                </div>
-            </header>
+            <BackHeader label="Rapportera hittad fågel" />
             <div className="max-w-2xl mx-auto px-6 py-10">
                 <div className="mb-8 flex items-center gap-3">
                     <div

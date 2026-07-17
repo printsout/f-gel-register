@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import PublicFooter from "@/components/PublicFooter";
+import BackHeader from "@/components/BackHeader";
 
 function formatDate(d) {
     if (!d) return "";
@@ -235,21 +236,7 @@ export default function Gallery() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card sticky top-0 z-10">
-                <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-                    <Link to="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" data-testid="link-back-home">
-                        <ArrowLeft size={16} /> Tillbaka
-                    </Link>
-                    <span className="label-caps">Galleri</span>
-                    {user ? (
-                        <Link to="/mina-faglar">
-                            <Button size="sm" variant="outline" data-testid="button-my-birds-nav">Mina inlägg</Button>
-                        </Link>
-                    ) : (
-                        <div className="w-[100px]" />
-                    )}
-                </div>
-            </header>
+            <BackHeader label="Galleri" />
 
             <div className="max-w-6xl mx-auto px-6 py-10">
                 <div className="mb-8 flex flex-wrap items-end justify-between gap-4">

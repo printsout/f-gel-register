@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin, MagnifyingGlass } from "@phosphor-icons/react";
 import api from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import PublicFooter from "@/components/PublicFooter";
+import BackHeader from "@/components/BackHeader";
 
 export default function FoundBirdsList() {
     const [items, setItems] = useState([]);
@@ -21,19 +22,7 @@ export default function FoundBirdsList() {
 
     return (
         <div className="min-h-screen bg-background">
-            <header className="border-b border-border bg-card">
-                <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <Link
-                        to="/"
-                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                        data-testid="link-back-home"
-                    >
-                        <ArrowLeft size={16} />
-                        Tillbaka
-                    </Link>
-                    <span className="label-caps">Hittade fåglar</span>
-                </div>
-            </header>
+            <BackHeader label="Hittade fåglar" />
             <div className="max-w-4xl mx-auto px-6 py-10">
                 <h1 className="text-3xl font-display font-bold">
                     Hittade papegojor
