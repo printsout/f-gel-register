@@ -13,6 +13,8 @@ import FoundBirdsList from "@/pages/public/FoundBirdsList";
 import Gallery from "@/pages/public/Gallery";
 import MyBirds from "@/pages/public/MyBirds";
 import ContentPage from "@/pages/public/ContentPage";
+import PaymentSuccess from "@/pages/public/PaymentSuccess";
+import PaymentCancel from "@/pages/public/PaymentCancel";
 
 import Dashboard from "@/pages/admin/Dashboard";
 import RegisteredBirds from "@/pages/admin/RegisteredBirds";
@@ -45,6 +47,8 @@ function AppRoutes() {
             <Route path="/galleri" element={<Gallery />} />
             <Route path="/mina-faglar" element={<MyBirds />} />
             <Route path="/sidor/:slug" element={<ContentPage />} />
+            <Route path="/betalning/lyckad" element={<PaymentSuccess />} />
+            <Route path="/betalning/avbruten" element={<PaymentCancel />} />
 
             <Route
                 path="/admin"

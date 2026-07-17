@@ -70,9 +70,22 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ Shared `SpeciesSelect` combobox (shadcn Popover + Command) with strict substring filter (diacritics-normalized), used on `/registrera-fagel` and `/rapportera-bortflygen`.
 - ✅ 18/18 backend + full frontend end-to-end verified.
 
+## Iteration 9 (2026-07-17): Footer polish + Landing CTA links
+- ✅ Footer: logo far-left with large "Kontakta oss" button underneath.
+- ✅ Feature-cards on landing are now linkable: "Säker registrering" → `/sidor/integritetspolicy`, "Rapportera fynd" → `/rapportera-bortflygen`, "Enkel avgift" → `/sidor/kopvillkor` (backing model gained a `link` field).
+
+## Iteration 10 (2026-07-17): Stripe Checkout integration
+- ✅ Provisioned Emergent claimable Stripe sandbox (Sweden, SMP-eligible → managed payments).
+- ✅ Catalog: `bird_registration_fee` (300 SEK one-time) + `membership_yearly` (100 SEK/year subscription). Setup script: `/app/backend/setup_stripe.py` (idempotent).
+- ✅ `POST /api/registered-birds` now creates the bird as `payment_status="pending"` and returns a Stripe `checkout_url`. Frontend redirects to Stripe Checkout.
+- ✅ Combined line-items in one Checkout session: 300 SEK × N birds + 100 SEK/year membership (skipped when user already has active membership).
+- ✅ New pages: `/betalning/lyckad` (polls `/api/payments/status/{session_id}`) and `/betalning/avbruten`.
+- ✅ Webhook at `/api/stripe/webhook` (signed) + inline polling fallback. Both call `_activate_payment_for_session` idempotently to flip bird→completed, create/activate `payment_plan`, set `user.membership_active`.
+- ✅ E2E verified with Stripe test card 4242… → bird `payment_status=completed`, plan active with `stripe_subscription_id`, user membership active.
+
 ## Backlog (P0/P1/P2)
 ### P1
-- **Stripe integration** for registration payments (only structure in DB; needs Stripe keys from user).
+- Hook up `/admin/payment-plans` route in `App.js` + AdminLayout sidebar (page component exists at `/app/frontend/src/pages/admin/PaymentPlans.jsx`).
 - Server-side pagination for `/admin/registered-birds` if dataset grows > 1000.
 - **Image uploads** for registered birds (currently `image_urls[]` field exists but no upload UI/storage).
 - Public bird gallery `/gallery` (endpoint exists, no UI yet).
@@ -83,7 +96,8 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - Password reset flow.
 - Bird detail public page with comments + comment form.
 - Increment `discount_codes.used_count` on successful payment.
-- Refactor `server.py` into `routers/` (currently ~1100 lines).
+- Handle Stripe subscription renewal events (`invoice.payment_succeeded`) to auto-extend `payment_plan.next_due_date`.
+- Refactor `server.py` into `routers/` (currently ~1300 lines).
 - Migrate `@app.on_event` to lifespan context manager.
 
 ## Test credentials (see `/app/memory/test_credentials.md`)

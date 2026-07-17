@@ -48,7 +48,27 @@ export default function RegisterBird() {
         try {
             const { accept, ...payload } = form;
             if (!payload.owner_email) delete payload.owner_email;
+            payload.origin_url = window.location.origin;
             const { data } = await api.post("/registered-birds", payload);
+            // Persist temp credentials so the success page can show them after redirect
+            if (data.account_created && data.temp_password) {
+                try {
+                    sessionStorage.setItem(
+                        "pending_account",
+                        JSON.stringify({
+                            email: data.account_email,
+                            temp_password: data.temp_password,
+                            session_id: data.session_id,
+                        }),
+                    );
+                } catch (_) {
+                    /* ignore quota errors */
+                }
+            }
+            if (data.checkout_url) {
+                window.location.assign(data.checkout_url);
+                return;
+            }
             setSuccessData({ ...data, wasLoggedIn: !!user });
         } catch (err) {
             toast.error(formatApiError(err));
@@ -216,7 +236,7 @@ export default function RegisterBird() {
                         disabled={busy}
                         data-testid="button-submit-register-bird"
                     >
-                        {busy ? "Registrerar…" : "Registrera fågel"}
+                        {busy ? "Öppnar kassan…" : "Registrera & gå till kassan"}
                     </Button>
                 </form>
             </div>

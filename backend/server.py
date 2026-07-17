@@ -22,6 +22,7 @@ from typing import Optional, List, Literal
 import bcrypt
 import jwt
 import httpx
+import stripe
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Query
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -43,6 +44,12 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALG = "HS256"
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@papegojregistret.se")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Admin123!")
+
+# Stripe
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+BIRD_REGISTRATION_LOOKUP_KEY = "bird_registration_fee"
+MEMBERSHIP_LOOKUP_KEY = "membership_yearly"
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -212,6 +219,7 @@ class BirdInput(BaseModel):
     additional_info: Optional[str] = None
     image_urls: Optional[List[str]] = None
     discount_code: Optional[str] = None
+    origin_url: Optional[str] = None
 
 
 class BirdUpdate(BaseModel):
@@ -642,40 +650,51 @@ async def create_registered_bird(data: BirdInput, request: Request):
     except DuplicateKeyError:
         raise HTTPException(status_code=400, detail=f"Ringnummer {ring} är redan registrerat")
 
-    # Create 1-year payment plan (registration fee 300 covers year 1 → next due in 365 days)
+    # Create Stripe Checkout session (registration fee + membership if needed)
+    origin_url = (data.origin_url or "").rstrip("/")
+    if not origin_url:
+        origin_url = str(request.base_url).rstrip("/")
+
+    user_doc = await db.users.find_one({"user_id": current_user_id}) if current_user_id else None
+    membership_active = bool(user_doc and user_doc.get("membership_active"))
+
+    try:
+        checkout = _build_bird_checkout_session(
+            bird_ids=[bird["id"]],
+            user_id=current_user_id,
+            user_email=current_user_email,
+            origin_url=origin_url,
+            include_membership=not membership_active,
+            discount_code_id=discount_code_id,
+            final_amount=final_amount,
+        )
+    except stripe.error.StripeError as e:  # noqa: PERF203
+        logger.exception("Stripe checkout failed: %s", e)
+        raise HTTPException(status_code=502, detail="Betalning kunde inte startas — kontakta support.")
+
+    # Track the session for status polling / webhook
     now_utc = datetime.now(timezone.utc)
-    plan_amount = final_amount if final_amount is not None else 300.0
-    plan = {
-        "id": str(uuid.uuid4()),
+    await db.payment_transactions.insert_one({
+        "session_id": checkout["session_id"],
         "user_id": current_user_id,
         "user_email": current_user_email,
-        "bird_id": bird["id"],
-        "ring_number": ring,
-        "plan_type": "annual",
-        "registration_amount": plan_amount,
-        "annual_amount": 100.0,
+        "bird_ids": [bird["id"]],
+        "amount": checkout["amount_total"],
         "currency": "SEK",
-        "start_date": now_utc.date().isoformat(),
-        "next_due_date": (now_utc.date() + timedelta(days=365)).isoformat(),
-        "status": "active",  # active | past_due | cancelled
-        "last_payment_date": None,  # Set when Stripe integrates
+        "status": "initiated",
+        "payment_status": "pending",
+        "include_membership": not membership_active,
+        "discount_code_id": discount_code_id,
         "created_at": now_utc.isoformat(),
         "updated_at": now_utc.isoformat(),
-    }
-    await db.payment_plans.insert_one(plan)
-    plan.pop("_id", None)
+    })
 
-    # Also update bird's annual_fee_paid_until so admin table reflects it
-    await db.registered_birds.update_one(
-        {"id": bird["id"]},
-        {"$set": {"annual_fee_paid_until": plan["next_due_date"]}},
-    )
-    bird["annual_fee_paid_until"] = plan["next_due_date"]
     bird.pop("_id", None)
 
     return {
         "bird": bird,
-        "payment_plan": plan,
+        "checkout_url": checkout["checkout_url"],
+        "session_id": checkout["session_id"],
         "account_created": account_created,
         "temp_password": temp_password,
         "account_email": current_user_email,
@@ -2145,6 +2164,223 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
+
+
+# ----------------------------------------------------------------------------
+# Stripe – Checkout, status polling, webhook
+# ----------------------------------------------------------------------------
+def _build_bird_checkout_session(
+    *,
+    bird_ids: List[str],
+    user_id: Optional[str],
+    user_email: Optional[str],
+    origin_url: str,
+    include_membership: bool,
+    discount_code_id: Optional[str] = None,
+    final_amount: Optional[float] = None,
+) -> dict:
+    """Create a Stripe Checkout session with N × bird registration + optional membership.
+
+    Returns dict with checkout_url, session_id and amount_total (SEK, in öre).
+    """
+    reg_prices = stripe.Price.list(
+        lookup_keys=[BIRD_REGISTRATION_LOOKUP_KEY], active=True, limit=1
+    ).data
+    if not reg_prices:
+        raise HTTPException(status_code=500, detail="Registreringspris saknas i Stripe.")
+    reg_price = reg_prices[0]
+
+    line_items = [{"price": reg_price.id, "quantity": max(1, len(bird_ids))}]
+
+    if include_membership:
+        mem_prices = stripe.Price.list(
+            lookup_keys=[MEMBERSHIP_LOOKUP_KEY], active=True, limit=1
+        ).data
+        if not mem_prices:
+            raise HTTPException(status_code=500, detail="Medlemskapspris saknas i Stripe.")
+        line_items.append({"price": mem_prices[0].id, "quantity": 1})
+        mode = "subscription"
+    else:
+        mode = "payment"
+
+    metadata = {
+        "user_id": user_id or "",
+        "bird_ids": ",".join(bird_ids),
+        "include_membership": "1" if include_membership else "0",
+        "discount_code_id": discount_code_id or "",
+    }
+
+    kwargs: dict = dict(
+        line_items=line_items,
+        mode=mode,
+        success_url=f"{origin_url}/betalning/lyckad?session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{origin_url}/betalning/avbruten",
+        metadata=metadata,
+        allow_promotion_codes=True,
+        locale="sv",
+    )
+    if user_email:
+        kwargs["customer_email"] = user_email
+
+    # Sweden is SMP-eligible → managed payments (Stripe handles tax etc.)
+    try:
+        session = stripe.checkout.Session.create(**kwargs, managed_payments={"enabled": True})
+    except stripe.error.InvalidRequestError as e:
+        msg = (getattr(e, "user_message", None) or str(e)).lower()
+        if "managed payments" in msg or "ineligible" in msg:
+            session = stripe.checkout.Session.create(
+                **kwargs,
+                automatic_tax={"enabled": True},
+                billing_address_collection="required",
+            )
+        else:
+            raise
+
+    amount_total = (reg_price.unit_amount or 0) * max(1, len(bird_ids))
+    if include_membership:
+        amount_total += mem_prices[0].unit_amount or 0
+    return {
+        "checkout_url": session.url,
+        "session_id": session.id,
+        "amount_total": amount_total,
+    }
+
+
+async def _activate_payment_for_session(session_id: str, stripe_session=None) -> None:
+    """Idempotent: on paid session, activate birds + create/refresh payment_plan + membership."""
+    txn = await db.payment_transactions.find_one({"session_id": session_id})
+    if not txn or txn.get("payment_status") == "paid":
+        return
+
+    now_utc = datetime.now(timezone.utc)
+    if stripe_session is None:
+        stripe_session = stripe.checkout.Session.retrieve(session_id)
+
+    payment_intent_id = getattr(stripe_session, "payment_intent", None)
+    subscription_id = getattr(stripe_session, "subscription", None)
+
+    updated = await db.payment_transactions.update_one(
+        {"session_id": session_id, "payment_status": {"$ne": "paid"}},
+        {"$set": {
+            "status": "completed",
+            "payment_status": "paid",
+            "stripe_payment_intent_id": payment_intent_id,
+            "stripe_subscription_id": subscription_id,
+            "updated_at": now_utc.isoformat(),
+        }},
+    )
+    if updated.modified_count == 0:
+        return  # someone else already flipped it
+
+    bird_ids: List[str] = txn.get("bird_ids") or []
+    next_due = (now_utc.date() + timedelta(days=365)).isoformat()
+
+    for bird_id in bird_ids:
+        bird = await db.registered_birds.find_one({"id": bird_id})
+        if not bird:
+            continue
+        await db.registered_birds.update_one(
+            {"id": bird_id},
+            {"$set": {
+                "payment_status": "completed",
+                "stripe_payment_intent_id": payment_intent_id,
+                "annual_fee_paid_until": next_due,
+            }},
+        )
+        # Create the annual payment plan now that money has landed
+        existing_plan = await db.payment_plans.find_one({"bird_id": bird_id})
+        if existing_plan:
+            await db.payment_plans.update_one(
+                {"bird_id": bird_id},
+                {"$set": {
+                    "status": "active",
+                    "last_payment_date": now_utc.date().isoformat(),
+                    "next_due_date": next_due,
+                    "updated_at": now_utc.isoformat(),
+                }},
+            )
+        else:
+            await db.payment_plans.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": txn.get("user_id"),
+                "user_email": txn.get("user_email"),
+                "bird_id": bird_id,
+                "ring_number": bird.get("ring_number"),
+                "plan_type": "annual",
+                "registration_amount": 300.0,
+                "annual_amount": 100.0,
+                "currency": "SEK",
+                "start_date": now_utc.date().isoformat(),
+                "next_due_date": next_due,
+                "status": "active",
+                "last_payment_date": now_utc.date().isoformat(),
+                "stripe_subscription_id": subscription_id,
+                "created_at": now_utc.isoformat(),
+                "updated_at": now_utc.isoformat(),
+            })
+
+    if txn.get("include_membership") and txn.get("user_id"):
+        await db.users.update_one(
+            {"user_id": txn["user_id"]},
+            {"$set": {
+                "membership_active": True,
+                "membership_next_due": next_due,
+                "stripe_subscription_id": subscription_id,
+                "updated_at": now_utc.isoformat(),
+            }},
+        )
+
+
+@api.get("/payments/status/{session_id}")
+async def get_payment_status(session_id: str):
+    record = await db.payment_transactions.find_one({"session_id": session_id})
+    if not record:
+        raise HTTPException(status_code=404, detail="Transaktionen hittades inte")
+    if record.get("payment_status") != "paid":
+        try:
+            s = stripe.checkout.Session.retrieve(session_id)
+            if s.payment_status == "paid" or s.status == "complete":
+                await _activate_payment_for_session(session_id, stripe_session=s)
+                record = await db.payment_transactions.find_one({"session_id": session_id})
+        except stripe.error.StripeError:
+            pass
+    return {
+        "session_id": record["session_id"],
+        "status": record["status"],
+        "payment_status": record["payment_status"],
+    }
+
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Stripe webhook parse failed: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid payload")
+
+    obj, event_type = event["data"]["object"], event["type"]
+    if event_type == "checkout.session.completed":
+        await _activate_payment_for_session(obj["id"], stripe_session=obj)
+    elif event_type == "checkout.session.async_payment_succeeded":
+        await _activate_payment_for_session(obj["id"], stripe_session=obj)
+    elif event_type == "checkout.session.async_payment_failed":
+        await db.payment_transactions.update_one(
+            {"session_id": obj["id"]},
+            {"$set": {"status": "failed", "payment_status": "failed",
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    elif event_type == "checkout.session.expired":
+        await db.payment_transactions.update_one(
+            {"session_id": obj["id"]},
+            {"$set": {"status": "expired", "payment_status": "expired",
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+    return {"status": "ok"}
 
 
 # Include router + CORS
