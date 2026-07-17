@@ -2082,8 +2082,8 @@ async def startup():
                 "config": {
                     "items": [
                         {"icon": "shield", "title": "Säker registrering", "text": "Ringnummer, ägaruppgifter och kontaktinfo lagras enligt GDPR.", "link": "/sidor/integritetspolicy"},
-                        {"icon": "magnifying-glass", "title": "Rapportera fynd", "text": "Hittad papegoja? Rapportera på 30 sekunder — utan konto."},
-                        {"icon": "feather", "title": "Enkel avgift", "text": "300 kr per fågel + 100 kr/år för hela flocken. Ingen krångel."},
+                        {"icon": "magnifying-glass", "title": "Rapportera fynd", "text": "Hittad papegoja? Rapportera på 30 sekunder — utan konto.", "link": "/rapportera-bortflygen"},
+                        {"icon": "feather", "title": "Enkel avgift", "text": "300 kr per fågel + 100 kr/år för hela flocken. Ingen krångel.", "link": "/sidor/kopvillkor"},
                     ],
                 },
             },
