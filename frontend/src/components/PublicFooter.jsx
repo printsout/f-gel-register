@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Mail } from "lucide-react";
 import api from "@/lib/api";
 
 export default function PublicFooter() {
@@ -16,39 +17,51 @@ export default function PublicFooter() {
             data-testid="public-footer"
         >
             <div className="max-w-6xl mx-auto px-6">
-                {/* Logo linking home */}
-                <div className="flex justify-center mb-8">
-                    <Link
-                        to="/"
-                        aria-label="Till startsidan"
-                        data-testid="footer-logo"
-                        className="inline-block group"
-                    >
-                        <img
-                            src="/images/fagelregister-logo.png"
-                            alt="Fågelregister"
-                            className="h-24 w-auto transition-transform group-hover:scale-105"
-                        />
-                    </Link>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-8">
+                    {/* Left column: Logo + big contact button */}
+                    <div className="flex flex-col items-start gap-6 md:col-span-1">
+                        <Link
+                            to="/"
+                            aria-label="Till startsidan"
+                            data-testid="footer-logo"
+                            className="inline-block group"
+                        >
+                            <img
+                                src="/images/fagelregister-logo.png"
+                                alt="Fågelregister"
+                                className="h-28 w-auto transition-transform group-hover:scale-105"
+                            />
+                        </Link>
+                        <a
+                            href="mailto:info@fagelregister.se"
+                            data-testid="footer-contact-button"
+                            className="inline-flex items-center gap-3 px-8 py-5 text-lg font-semibold rounded-xl bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:opacity-90 transition-all"
+                        >
+                            <Mail className="w-6 h-6" />
+                            Kontakta oss
+                        </a>
+                    </div>
+
+                    {/* Right column: page links */}
+                    {pages.length > 0 && (
+                        <div
+                            className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3"
+                            data-testid="footer-links-grid"
+                        >
+                            {pages.map((p) => (
+                                <Link
+                                    key={p.id}
+                                    to={`/sidor/${p.slug}`}
+                                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                    data-testid={`footer-link-${p.slug}`}
+                                >
+                                    {p.title}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {pages.length > 0 && (
-                    <div
-                        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-6 gap-y-3 mb-8 text-center md:text-left"
-                        data-testid="footer-links-grid"
-                    >
-                        {pages.map((p) => (
-                            <Link
-                                key={p.id}
-                                to={`/sidor/${p.slug}`}
-                                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                                data-testid={`footer-link-${p.slug}`}
-                            >
-                                {p.title}
-                            </Link>
-                        ))}
-                    </div>
-                )}
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
                     <p className="text-xs text-muted-foreground">
                         © {new Date().getFullYear()} Fågelregister
