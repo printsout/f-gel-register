@@ -208,6 +208,7 @@ class BirdInput(BaseModel):
     ring_number: str = Field(min_length=1)
     owner_name: str = Field(min_length=1)
     phone_number: str
+    owner_email: Optional[EmailStr] = None
     additional_info: Optional[str] = None
     image_urls: Optional[List[str]] = None
     discount_code: Optional[str] = None
@@ -564,11 +565,47 @@ async def create_registered_bird(data: BirdInput, request: Request):
 
     # Try to attach current user if authenticated (optional)
     current_user_id: Optional[str] = None
+    current_user_email: Optional[str] = None
     try:
         current_user = await get_current_user(request)
         current_user_id = current_user["user_id"]
+        current_user_email = current_user["email"]
     except HTTPException:
         pass
+
+    # Auto-create account when the submitter is anonymous but provided an email
+    account_created = False
+    temp_password: Optional[str] = None
+    if not current_user_id and data.owner_email:
+        email = data.owner_email.lower()
+        existing_user = await db.users.find_one({"email": email})
+        if existing_user:
+            current_user_id = existing_user["user_id"]
+            current_user_email = existing_user["email"]
+        else:
+            temp_password = secrets.token_urlsafe(9)
+            first, _, last = (data.owner_name or "").partition(" ")
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            role = "admin" if email == ADMIN_EMAIL.lower() else "user"
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.users.insert_one({
+                "user_id": user_id,
+                "email": email,
+                "password_hash": hash_password(temp_password),
+                "first_name": first,
+                "last_name": last,
+                "role": role,
+                "is_blocked": False,
+                "profile_image_url": None,
+                "auth_provider": "auto",
+                "must_reset_password": True,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            })
+            current_user_id = user_id
+            current_user_email = email
+            account_created = True
+            await log_activity(user_id, email, "user.auto_register", user_id, {"source": "bird_registration"})
 
     discount_code_id: Optional[str] = None
     final_amount: Optional[float] = None
@@ -604,8 +641,45 @@ async def create_registered_bird(data: BirdInput, request: Request):
         await db.registered_birds.insert_one(bird)
     except DuplicateKeyError:
         raise HTTPException(status_code=400, detail=f"Ringnummer {ring} är redan registrerat")
+
+    # Create 1-year payment plan (registration fee 300 covers year 1 → next due in 365 days)
+    now_utc = datetime.now(timezone.utc)
+    plan_amount = final_amount if final_amount is not None else 300.0
+    plan = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user_id,
+        "user_email": current_user_email,
+        "bird_id": bird["id"],
+        "ring_number": ring,
+        "plan_type": "annual",
+        "registration_amount": plan_amount,
+        "annual_amount": 100.0,
+        "currency": "SEK",
+        "start_date": now_utc.date().isoformat(),
+        "next_due_date": (now_utc.date() + timedelta(days=365)).isoformat(),
+        "status": "active",  # active | past_due | cancelled
+        "last_payment_date": None,  # Set when Stripe integrates
+        "created_at": now_utc.isoformat(),
+        "updated_at": now_utc.isoformat(),
+    }
+    await db.payment_plans.insert_one(plan)
+    plan.pop("_id", None)
+
+    # Also update bird's annual_fee_paid_until so admin table reflects it
+    await db.registered_birds.update_one(
+        {"id": bird["id"]},
+        {"$set": {"annual_fee_paid_until": plan["next_due_date"]}},
+    )
+    bird["annual_fee_paid_until"] = plan["next_due_date"]
     bird.pop("_id", None)
-    return bird
+
+    return {
+        "bird": bird,
+        "payment_plan": plan,
+        "account_created": account_created,
+        "temp_password": temp_password,
+        "account_email": current_user_email,
+    }
 
 
 @api.get("/found-birds")
@@ -993,6 +1067,87 @@ async def admin_delete_section(section_id: str, admin: dict = Depends(require_ad
         raise HTTPException(status_code=404, detail="Sektion hittades inte")
     await log_activity(admin["user_id"], admin["email"], "admin.homepage.delete", section_id)
     return {"success": True}
+
+
+# ----------------------------------------------------------------------------
+# Payment plans (yearly subscription tracking)
+# ----------------------------------------------------------------------------
+@api.get("/admin/payment-plans")
+async def admin_list_payment_plans(
+    _: dict = Depends(require_admin),
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    q: dict = {}
+    if status and status != "all":
+        q["status"] = status
+    if search:
+        s = re.escape(search)
+        q["$or"] = [
+            {"user_email": {"$regex": s, "$options": "i"}},
+            {"ring_number": {"$regex": s, "$options": "i"}},
+        ]
+    plans = await db.payment_plans.find(q, {"_id": 0}).sort("next_due_date", 1).to_list(1000)
+    # Mark plans past their due date as past_due (lazy)
+    today = datetime.now(timezone.utc).date().isoformat()
+    for p in plans:
+        if p.get("status") == "active" and p.get("next_due_date") and p["next_due_date"] < today:
+            p["status"] = "past_due"
+    return plans
+
+
+@api.post("/admin/payment-plans/{plan_id}/renew")
+async def admin_renew_plan(plan_id: str, admin: dict = Depends(require_admin)):
+    plan = await db.payment_plans.find_one({"id": plan_id})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Betalningsplan hittades inte")
+    today = datetime.now(timezone.utc).date()
+    # Roll next_due forward by 365 days from previous due (or from today if past)
+    prev_due = plan.get("next_due_date")
+    try:
+        base = datetime.fromisoformat(prev_due).date() if prev_due else today
+    except Exception:
+        base = today
+    if base < today:
+        base = today
+    new_due = (base + timedelta(days=365)).isoformat()
+    await db.payment_plans.update_one(
+        {"id": plan_id},
+        {"$set": {
+            "next_due_date": new_due,
+            "last_payment_date": today.isoformat(),
+            "status": "active",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    await db.registered_birds.update_one(
+        {"id": plan.get("bird_id")},
+        {"$set": {"annual_fee_paid_until": new_due, "payment_status": "completed"}},
+    )
+    await log_activity(admin["user_id"], admin["email"], "admin.plan.renew", plan_id, {"next_due": new_due})
+    return await db.payment_plans.find_one({"id": plan_id}, {"_id": 0})
+
+
+@api.post("/admin/payment-plans/{plan_id}/cancel")
+async def admin_cancel_plan(plan_id: str, admin: dict = Depends(require_admin)):
+    result = await db.payment_plans.update_one(
+        {"id": plan_id},
+        {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Betalningsplan hittades inte")
+    await log_activity(admin["user_id"], admin["email"], "admin.plan.cancel", plan_id)
+    return {"success": True}
+
+
+@api.get("/admin/payment-plans/export/csv")
+async def admin_export_payment_plans(_: dict = Depends(require_admin)):
+    plans = await db.payment_plans.find({}, {"_id": 0}).sort("next_due_date", 1).to_list(5000)
+    return _csv_stream(plans, "payment_plans", [
+        "id", "user_email", "ring_number", "plan_type", "registration_amount",
+        "annual_amount", "start_date", "next_due_date", "last_payment_date",
+        "status", "created_at",
+    ])
 
 
 # ----------------------------------------------------------------------------
@@ -1696,6 +1851,10 @@ async def startup():
     await db.menu_items.create_index("id", unique=True)
     await db.menu_items.create_index("parent_id")
     await db.menu_items.create_index("sort_order")
+    await db.payment_plans.create_index("id", unique=True)
+    await db.payment_plans.create_index("user_id")
+    await db.payment_plans.create_index("bird_id")
+    await db.payment_plans.create_index("next_due_date")
 
     now = datetime.now(timezone.utc).isoformat()
 
