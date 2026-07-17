@@ -51,6 +51,12 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 BIRD_REGISTRATION_LOOKUP_KEY = "bird_registration_fee"
 MEMBERSHIP_LOOKUP_KEY = "membership_yearly"
 
+# Emergent-managed email (Resend proxy)
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMERGENT_EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Fågelregister")
+CONTACT_INBOX_EMAIL = os.environ.get("CONTACT_INBOX_EMAIL", "info@fagelregister.se")
+
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
@@ -847,7 +853,82 @@ async def submit_contact_message(data: ContactMessageInput):
     }
     await db.contact_messages.insert_one(doc)
     doc.pop("_id", None)
+
+    # Fire off notification email to admin inbox (non-blocking, best-effort)
+    if EMERGENT_EMAIL_KEY:
+        try:
+            html = _build_contact_email_html(doc)
+            payload = {
+                "to": [CONTACT_INBOX_EMAIL],
+                "subject": f"Nytt kontaktmeddelande: {data.subject}",
+                "html": html,
+                "from_name": EMAIL_FROM_NAME,
+                "contact_email": data.email,
+            }
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    f"{EMAIL_BASE_URL}/api/v1/email/send",
+                    headers={"X-Email-Key": EMERGENT_EMAIL_KEY},
+                    json=payload,
+                )
+            if resp.status_code >= 400:
+                logger.warning("Contact email send failed %s: %s", resp.status_code, resp.text)
+            else:
+                await db.contact_messages.update_one(
+                    {"id": doc["id"]},
+                    {"$set": {"email_sent_at": datetime.now(timezone.utc).isoformat()}},
+                )
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Contact email exception: %s", e)
+
     return {"success": True, "id": doc["id"]}
+
+
+def _build_contact_email_html(doc: dict) -> str:
+    """HTML för kontaktmeddelande-notis (inline CSS, e-postsäker layout)."""
+    def esc(v):
+        s = "" if v is None else str(v)
+        return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                 .replace('"', "&quot;"))
+    phone_row = ""
+    if doc.get("phone"):
+        phone_row = (
+            '<tr><td style="padding:6px 0;color:#6b7280;">Telefon</td>'
+            f'<td style="padding:6px 0;"><a href="tel:{esc(doc["phone"])}" style="color:#FF5C00;text-decoration:none;">{esc(doc["phone"])}</a></td></tr>'
+        )
+    message_html = esc(doc["message"]).replace("\n", "<br/>")
+    return f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#0D2B1D;padding:20px 24px;">
+        <div style="color:#ffffff;font-size:14px;letter-spacing:2px;text-transform:uppercase;opacity:0.75;">Fågelregister · Kontakt</div>
+        <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px;">Nytt kontaktmeddelande</div>
+      </td></tr>
+      <tr><td style="padding:24px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+          <tr><td style="padding:6px 0;color:#6b7280;width:120px;">Från</td>
+              <td style="padding:6px 0;font-weight:600;">{esc(doc['name'])}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;">E-post</td>
+              <td style="padding:6px 0;"><a href="mailto:{esc(doc['email'])}" style="color:#FF5C00;text-decoration:none;">{esc(doc['email'])}</a></td></tr>
+          {phone_row}
+          <tr><td style="padding:6px 0;color:#6b7280;">Ämne</td>
+              <td style="padding:6px 0;font-weight:600;">{esc(doc['subject'])}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;">Mottaget</td>
+              <td style="padding:6px 0;">{esc(doc['created_at'][:19].replace('T',' '))}</td></tr>
+        </table>
+        <div style="margin-top:20px;padding:16px;background:#f9fafb;border-left:4px solid #FF5C00;border-radius:6px;font-size:14px;line-height:1.6;white-space:pre-wrap;">{message_html}</div>
+        <div style="margin-top:24px;text-align:center;">
+          <a href="mailto:{esc(doc['email'])}?subject=Re:%20{esc(doc['subject'])}" style="display:inline-block;padding:12px 24px;background:#FF5C00;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Svara direkt</a>
+        </div>
+      </td></tr>
+      <tr><td style="background:#f9fafb;padding:12px 24px;color:#9ca3af;font-size:12px;text-align:center;">
+        Meddelande-ID {esc(doc['id'])}
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+"""
 
 
 @api.get("/admin/contact-messages")
