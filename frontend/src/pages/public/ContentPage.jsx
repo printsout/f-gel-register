@@ -120,7 +120,7 @@ export default function ContentPage() {
                     </Link>
                     <div className="flex items-center gap-2 text-sm">
                         <Feather size={16} weight="duotone" className="text-primary" />
-                        <span className="font-display font-bold">Papegojregistret</span>
+                        <span className="font-display font-bold">Fågelregister</span>
                     </div>
                 </div>
             </header>
@@ -148,7 +148,7 @@ export default function ContentPage() {
                 )}
                 {!loading && page && (
                     <>
-                        <p className="label-caps mb-3">Papegojregistret</p>
+                        <p className="label-caps mb-3">Fågelregister</p>
                         <h1
                             className="text-4xl md:text-5xl font-display font-bold tracking-tight mb-8"
                             data-testid="content-title"

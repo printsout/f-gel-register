@@ -106,9 +106,12 @@ export default function RegisterBird() {
                             placeholder="t.ex. SE123456789"
                             value={form.ring_number}
                             onChange={(e) =>
-                                setForm({ ...form, ring_number: e.target.value })
+                                setForm({ ...form, ring_number: e.target.value.toUpperCase().replace(/\s+/g, "") })
                             }
                         />
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Ringnumret är unikt — samma nummer kan inte registreras två gånger.
+                        </p>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                         <div>

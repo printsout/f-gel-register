@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 10 — Backend ring_number normalization + uniqueness bug fix verified. Added focused pytest module /app/backend/tests/test_ring_number_normalization.py with 16 tests covering: (a) POST /api/registered-birds rejects duplicates by exact match, lowercase, and whitespace variants; (b) fresh ring is stored normalized (uppercase, whitespace-collapsed) and lowercase/whitespace re-registration of the same ring is blocked; (c) PATCH /api/admin/registered-birds/{id} blocks case-insensitive collisions with other birds, allows same-ring different-case self-update, and normalizes stored value; (d) startup migration confirmed — all 5 seeded rings (SE100000..SE100004) present as uppercase via GET /api/admin/registered-birds. Also re-ran full existing regression suite backend_test.py (43 tests) → all green.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_ring_number_normalization.py",
+    "/app/test_reports/pytest/ring_normalization.xml",
+    "/app/test_reports/pytest/backend_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py _normalize_ring() uses re.sub(r'\\\\s+', '', raw).upper() — collapses all whitespace (including internal spaces), which is consistent with what the backend enforces on write and on migration. This is intentionally strict; any pre-existing UI that stored intentionally-spaced ring numbers would now be normalized. Confirmed acceptable per problem statement ('strip whitespace').",
+    "startup migration loop (server.py lines 1662-1683) is idempotent and handles DuplicateKeyError from pre-existing collisions gracefully; safe to run on every boot.",
+    "unique index on ring_number is created before migration (line 1659) — good ordering; and DuplicateKeyError safety net exists both in POST and PATCH handlers, protecting against race conditions.",
+    "Consistent Swedish error message 'Ringnummer {ring} är redan registrerat' returned with normalized value in the message so users see what value the system compared against — good UX."
+  ],
+  "updated_files": ["/app/backend/tests/test_ring_number_normalization.py"],
+  "success_rate": {"backend": "100% (16/16 new + 43/43 regression = 59/59 passed)", "frontend": "N/A (backend-only per request)"},
+  "test_credentials": "admin@papegojregistret.se / Admin123! (verified working)",
+  "seed_data_creation": "Tests create a few TEST birds via POST /api/registered-birds using randomized RB-2026-XXXXXX / TESTA-XXXXXX / TESTB-XXXXXX ring numbers, then clean them up via DELETE /api/admin/registered-birds/{id} in teardown steps.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 10 covered ring_number normalization only. The new test file /app/backend/tests/test_ring_number_normalization.py can be re-run standalone. Note: frontend piece (auto-uppercase input + hint text on /registrera-fagel + sonner toast on duplicate submit) was NOT tested — request scope was backend only. If UI verification is requested next, target [data-testid='ring-number-input'] on RegisterBird.jsx and verify toast shows exact backend Swedish message.",
+  "rca of the issue": "Root cause: original POST/PATCH handlers compared and stored ring_number verbatim, so 'SE100000', 'se100000' and ' SE 100000 ' were treated as three distinct keys. Fix (already applied by main agent): (1) _normalize_ring() helper — collapse whitespace + uppercase; (2) apply normalize on POST + PATCH before uniqueness check; (3) unique Mongo index + DuplicateKeyError catch as race-condition safety net; (4) one-time startup migration to normalize existing docs. All four are exercised by the new tests and verified working end-to-end via the external URL."
+}

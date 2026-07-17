@@ -107,7 +107,7 @@ export default function ReportMissing() {
                     />
                     <p className="text-xs text-muted-foreground">
                         Denna rapport visas <strong>inte</strong> i galleriet eller på
-                        hittade-fåglar-sidan. Endast Papegojregistrets administratörer
+                        hittade-fåglar-sidan. Endast Fågelregisters administratörer
                         ser dina uppgifter och kontaktar dig när något matchar.
                     </p>
                 </div>
@@ -286,7 +286,7 @@ export default function ReportMissing() {
                                     delas inte publikt.
                                 </span>
                                 <span className="block">
-                                    Papegojregistrets admin bevakar inkommande
+                                    Fågelregisters admin bevakar inkommande
                                     fyndrapporter — så fort något matchar din
                                     fågel kontaktar vi dig via telefon eller e-post.
                                 </span>

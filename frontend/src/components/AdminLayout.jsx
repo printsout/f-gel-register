@@ -168,7 +168,7 @@ export default function AdminLayout({ children }) {
                     >
                         <ListIcon size={22} />
                     </button>
-                    <p className="font-display font-bold">Papegojregistret</p>
+                    <p className="font-display font-bold">Fågelregister</p>
                 </div>
 
                 <main className="flex-1 overflow-x-hidden">

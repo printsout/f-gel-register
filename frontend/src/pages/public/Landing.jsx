@@ -82,7 +82,7 @@ function HeroSection({ config, user, isAdmin }) {
                     style={{ backgroundImage: `url('${config.image_url}')`, backgroundSize: "cover", backgroundPosition: "center" }}
                 >
                     <div className="absolute bottom-6 left-6 right-6 p-5 rounded-md bg-card/90 backdrop-blur border border-border">
-                        <p className="label-caps mb-1">{config.eyebrow || "Papegojregistret"}</p>
+                        <p className="label-caps mb-1">{config.eyebrow || "Fågelregister"}</p>
                         <p className="font-display text-2xl font-bold">Skydd genom gemenskap</p>
                     </div>
                 </div>
@@ -229,7 +229,7 @@ export default function Landing() {
             {!loading && sections.length === 0 && (
                 <div className="max-w-3xl mx-auto px-6 py-20 text-center">
                     <p className="label-caps mb-3">Startsida</p>
-                    <h1 className="text-3xl font-display font-bold">Välkommen till Papegojregistret</h1>
+                    <h1 className="text-3xl font-display font-bold">Välkommen till Fågelregister</h1>
                     <p className="text-muted-foreground mt-3">
                         Startsidan konfigureras av admin. Kika förbi{" "}
                         <Link to="/galleri" className="text-primary underline-offset-2 hover:underline">galleriet</Link>{" "}

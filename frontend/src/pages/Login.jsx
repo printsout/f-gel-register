@@ -231,7 +231,7 @@ export default function Login() {
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                    © {new Date().getFullYear()} Papegojregistret
+                    © {new Date().getFullYear()} Fågelregister
                 </p>
             </div>
 

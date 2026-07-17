@@ -26,6 +26,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depend
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 import io
 import csv
@@ -176,6 +177,13 @@ async def log_activity(actor_id: Optional[str], actor_email: Optional[str], acti
 # Pydantic models
 # ----------------------------------------------------------------------------
 SWEDISH_PHONE_RE = re.compile(r"^(07[0-9]|08|01[1-9]|02[1-9]|03[1-9]|04[0-9]|05[0-9]|06[0-9]|09[0-9])[0-9]{6,8}$")
+
+
+def _normalize_ring(raw: Optional[str]) -> Optional[str]:
+    """Uppercase + strip + collapse spaces to make ring_number comparison consistent."""
+    if not raw:
+        return raw
+    return re.sub(r"\s+", "", raw).upper()
 
 
 class RegisterInput(BaseModel):
@@ -546,9 +554,13 @@ async def create_registered_bird(data: BirdInput, request: Request):
     if not SWEDISH_PHONE_RE.match(data.phone_number):
         raise HTTPException(status_code=400, detail="Ange ett giltigt svenskt telefonnummer")
 
-    existing = await db.registered_birds.find_one({"ring_number": data.ring_number})
+    ring = _normalize_ring(data.ring_number)
+    if not ring:
+        raise HTTPException(status_code=400, detail="Ringnummer krävs")
+
+    existing = await db.registered_birds.find_one({"ring_number": ring})
     if existing:
-        raise HTTPException(status_code=400, detail="Ringnummer finns redan registrerat")
+        raise HTTPException(status_code=400, detail=f"Ringnummer {ring} är redan registrerat")
 
     # Try to attach current user if authenticated (optional)
     current_user_id: Optional[str] = None
@@ -573,7 +585,7 @@ async def create_registered_bird(data: BirdInput, request: Request):
         "id": str(uuid.uuid4()),
         "user_id": current_user_id,
         "species": data.species,
-        "ring_number": data.ring_number,
+        "ring_number": ring,
         "owner_name": data.owner_name,
         "phone_number": data.phone_number,
         "additional_info": data.additional_info,
@@ -588,7 +600,10 @@ async def create_registered_bird(data: BirdInput, request: Request):
         "final_amount": final_amount,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.registered_birds.insert_one(bird)
+    try:
+        await db.registered_birds.insert_one(bird)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail=f"Ringnummer {ring} är redan registrerat")
     bird.pop("_id", None)
     return bird
 
@@ -1419,10 +1434,16 @@ async def admin_update_registered_bird(bird_id: str, updates: BirdUpdate, admin:
     if not payload:
         raise HTTPException(status_code=400, detail="Inget att uppdatera")
     if "ring_number" in payload:
+        payload["ring_number"] = _normalize_ring(payload["ring_number"])
+        if not payload["ring_number"]:
+            raise HTTPException(status_code=400, detail="Ringnummer krävs")
         conflict = await db.registered_birds.find_one({"ring_number": payload["ring_number"], "id": {"$ne": bird_id}})
         if conflict:
-            raise HTTPException(status_code=400, detail="Ringnummer finns redan registrerat")
-    result = await db.registered_birds.update_one({"id": bird_id}, {"$set": payload})
+            raise HTTPException(status_code=400, detail=f"Ringnummer {payload['ring_number']} är redan registrerat")
+    try:
+        result = await db.registered_birds.update_one({"id": bird_id}, {"$set": payload})
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Ringnummer är redan registrerat")
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Fågel hittades inte")
     await log_activity(admin["user_id"], admin["email"], "admin.bird.update", bird_id, payload)
@@ -1637,6 +1658,28 @@ async def startup():
     await db.users.create_index("user_id", unique=True)
     await db.registered_birds.create_index("ring_number", unique=True)
     await db.registered_birds.create_index("id", unique=True)
+
+    # One-time normalization of existing ring_numbers to uppercase (idempotent)
+    cursor = db.registered_birds.find({}, {"id": 1, "ring_number": 1})
+    async for doc in cursor:
+        current = doc.get("ring_number")
+        normalized = _normalize_ring(current)
+        if normalized and normalized != current:
+            existing = await db.registered_birds.find_one({"ring_number": normalized, "id": {"$ne": doc["id"]}})
+            if existing:
+                # Collision — leave as-is and log
+                logger.warning(
+                    "Ring collision: %s and %s both normalize to %s",
+                    doc["id"], existing["id"], normalized,
+                )
+                continue
+            try:
+                await db.registered_birds.update_one(
+                    {"id": doc["id"]},
+                    {"$set": {"ring_number": normalized}},
+                )
+            except DuplicateKeyError:
+                pass
     await db.found_birds.create_index("id", unique=True)
     await db.discount_codes.create_index("code", unique=True)
     await db.discount_codes.create_index("id", unique=True)
