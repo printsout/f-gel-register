@@ -2081,7 +2081,7 @@ async def startup():
                 "subtitle": "Så här funkar det",
                 "config": {
                     "items": [
-                        {"icon": "shield", "title": "Säker registrering", "text": "Ringnummer, ägaruppgifter och kontaktinfo lagras enligt GDPR."},
+                        {"icon": "shield", "title": "Säker registrering", "text": "Ringnummer, ägaruppgifter och kontaktinfo lagras enligt GDPR.", "link": "/sidor/integritetspolicy"},
                         {"icon": "magnifying-glass", "title": "Rapportera fynd", "text": "Hittad papegoja? Rapportera på 30 sekunder — utan konto."},
                         {"icon": "feather", "title": "Enkel avgift", "text": "300 kr per fågel + 100 kr/år för hela flocken. Ingen krångel."},
                     ],

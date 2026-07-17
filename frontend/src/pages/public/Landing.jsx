@@ -127,8 +127,8 @@ function FeaturesSection({ config }) {
         <section className="max-w-6xl mx-auto px-6 py-16 grid md:grid-cols-3 gap-6">
             {items.map((item, i) => {
                 const Icon = ICON_MAP[item.icon] || Feather;
-                return (
-                    <div key={i} className="surface p-6 fade-in" data-testid={`feature-card-${i}`}>
+                const inner = (
+                    <>
                         <div
                             className="w-10 h-10 rounded-md flex items-center justify-center mb-4"
                             style={{ background: "hsl(var(--primary) / 0.12)" }}
@@ -137,6 +137,23 @@ function FeaturesSection({ config }) {
                         </div>
                         <h3 className="font-display font-bold text-lg">{item.title}</h3>
                         <p className="text-sm text-muted-foreground mt-2">{item.text}</p>
+                    </>
+                );
+                if (item.link) {
+                    return (
+                        <Link
+                            key={i}
+                            to={item.link}
+                            className="surface p-6 fade-in block hover:shadow-md hover:-translate-y-0.5 transition-all"
+                            data-testid={`feature-card-${i}`}
+                        >
+                            {inner}
+                        </Link>
+                    );
+                }
+                return (
+                    <div key={i} className="surface p-6 fade-in" data-testid={`feature-card-${i}`}>
+                        {inner}
                     </div>
                 );
             })}
