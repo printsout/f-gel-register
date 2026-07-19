@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import BulkActionsBar, { SelectAllCheckbox } from "@/components/BulkActionsBar";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
+import { StyleEditor, RichTextEditor } from "@/components/StyleControls";
 import {
     Select,
     SelectContent,
@@ -60,6 +61,18 @@ const SECTION_META = {
     text_block: { label: "Textblock", icon: ChatCenteredText },
     cta_banner: { label: "CTA-banner", icon: ImageSquare },
 };
+
+// Convert legacy plain-text content to HTML on the fly for the rich text editor.
+function escapeAsHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .split(/\n{2,}/)
+        .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
+        .join("");
+}
 
 function SectionListItem({ section, index, total, active, onSelect, onToggleVisible, onMove, onDuplicate, onDelete, selected, onToggleSelect }) {
     const Icon = SECTION_META[section.type]?.icon || Rows;
@@ -193,7 +206,9 @@ function TextField({ label, value, onChange, placeholder, testid, rows }) {
 function ConfigField({ section, updateConfig, patchConfig }) {
     const c = section.config || {};
     switch (section.type) {
-        case "hero":
+        case "hero": {
+            const disc = c.discount || {};
+            const patchDiscount = (d) => patchConfig({ discount: { ...disc, ...d } });
             return (
                 <div className="space-y-4">
                     <TextField label="Förrubrik (eyebrow)" value={c.eyebrow} onChange={(v) => patchConfig({ eyebrow: v })} placeholder="Personliga produkter" testid="config-eyebrow" />
@@ -216,8 +231,110 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                         </div>
                     </div>
                     <TextField label="Hero-bild (URL)" value={c.image_url} onChange={(v) => patchConfig({ image_url: v })} placeholder="https://…" testid="config-image-url" />
+
+                    {/* Rabatt-bubbla */}
+                    <div className="border-t border-border pt-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <p className="label-caps">Rabatt-bubbla</p>
+                            <label className="flex items-center gap-2 text-sm">
+                                <Switch
+                                    checked={!!disc.enabled}
+                                    onCheckedChange={(v) => patchDiscount({ enabled: v })}
+                                    data-testid="config-discount-enabled"
+                                />
+                                <span className="text-muted-foreground">
+                                    {disc.enabled ? "Aktiv" : "Av"}
+                                </span>
+                            </label>
+                        </div>
+                        {disc.enabled && (
+                            <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                                <TextField
+                                    label="Rubrik (kort)"
+                                    value={disc.title}
+                                    onChange={(v) => patchDiscount({ title: v })}
+                                    placeholder="20% RABATT"
+                                    testid="config-discount-title"
+                                />
+                                <TextField
+                                    label="Underrubrik"
+                                    value={disc.subtitle}
+                                    onChange={(v) => patchDiscount({ subtitle: v })}
+                                    placeholder="Kod: FAGEL20"
+                                    testid="config-discount-subtitle"
+                                />
+                                <TextField
+                                    label="Länk (klickmål)"
+                                    value={disc.link}
+                                    onChange={(v) => patchDiscount({ link: v })}
+                                    placeholder="/registrera-fagel"
+                                    testid="config-discount-link"
+                                />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="label-caps">Bakgrund</Label>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <input
+                                                type="color"
+                                                value={disc.bg_color && disc.bg_color.startsWith("#") ? disc.bg_color : "#FF5C00"}
+                                                onChange={(e) => patchDiscount({ bg_color: e.target.value })}
+                                                className="h-9 w-11 rounded border border-border cursor-pointer bg-transparent"
+                                                data-testid="config-discount-bg"
+                                            />
+                                            <Input
+                                                value={disc.bg_color || ""}
+                                                onChange={(e) => patchDiscount({ bg_color: e.target.value })}
+                                                placeholder="#FF5C00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="label-caps">Textfärg</Label>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <input
+                                                type="color"
+                                                value={disc.text_color && disc.text_color.startsWith("#") ? disc.text_color : "#ffffff"}
+                                                onChange={(e) => patchDiscount({ text_color: e.target.value })}
+                                                className="h-9 w-11 rounded border border-border cursor-pointer bg-transparent"
+                                                data-testid="config-discount-text-color"
+                                            />
+                                            <Input
+                                                value={disc.text_color || ""}
+                                                onChange={(e) => patchDiscount({ text_color: e.target.value })}
+                                                placeholder="#ffffff"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label className="label-caps">Position</Label>
+                                    <Select
+                                        value={disc.position || "top-right"}
+                                        onValueChange={(v) => patchDiscount({ position: v })}
+                                    >
+                                        <SelectTrigger className="mt-1" data-testid="config-discount-position">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="top-right">Uppe höger</SelectItem>
+                                            <SelectItem value="top-left">Uppe vänster</SelectItem>
+                                            <SelectItem value="bottom-right">Nere höger</SelectItem>
+                                            <SelectItem value="bottom-left">Nere vänster</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <StyleEditor
+                        style={c.style}
+                        onChange={(s) => patchConfig({ style: s })}
+                        testidPrefix="hero-style"
+                    />
                 </div>
             );
+        }
         case "emergency_cta":
             return (
                 <div className="space-y-4">
@@ -293,7 +410,22 @@ function ConfigField({ section, updateConfig, patchConfig }) {
             return (
                 <div className="space-y-4">
                     <TextField label="Titel" value={c.title} onChange={(v) => patchConfig({ title: v })} testid="config-title" />
-                    <TextField label="Innehåll (Markdown)" value={c.content} onChange={(v) => patchConfig({ content: v })} testid="config-content" rows={8} />
+                    <div>
+                        <Label className="label-caps">Innehåll (rikt textredigerare)</Label>
+                        <div className="mt-1">
+                            <RichTextEditor
+                                value={c.content_html || (c.content ? escapeAsHtml(c.content) : "")}
+                                onChange={(html) => patchConfig({ content_html: html, content: null })}
+                                placeholder="Skriv brödtexten här. Använd verktygen ovanför för formatering."
+                                testid="config-content-html"
+                            />
+                        </div>
+                    </div>
+                    <StyleEditor
+                        style={c.style}
+                        onChange={(s) => patchConfig({ style: s })}
+                        testidPrefix="text-style"
+                    />
                 </div>
             );
         case "cta_banner":
@@ -305,6 +437,11 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                         <TextField label="Knapptext" value={c.link_label} onChange={(v) => patchConfig({ link_label: v })} testid="config-link-label" />
                         <TextField label="Länk" value={c.link_url} onChange={(v) => patchConfig({ link_url: v })} testid="config-link-url" />
                     </div>
+                    <StyleEditor
+                        style={c.style}
+                        onChange={(s) => patchConfig({ style: s })}
+                        testidPrefix="cta-style"
+                    />
                 </div>
             );
         default:

@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only testing of (1) Rabatt-bubbla discount badge on Hero and (2) StyleEditor + RichTextEditor on Hero/Text-block/CTA-banner sections. All 12 review scenarios PASSED end-to-end against public URL. No frontend bugs found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_14.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Homepage.jsx is ~843 lines — approaching the 700-line refactor threshold. Consider splitting ConfigField's per-section branches into dedicated components (HeroConfig.jsx, TextBlockConfig.jsx, CtaBannerConfig.jsx, FeaturesConfig.jsx) for maintainability.",
+    "RichTextEditor uses the deprecated document.execCommand API. Chromium still supports it but Mozilla has deprecated it and future Chromium versions may drop support. Consider migrating to a library (Tiptap/Lexical/Slate) or manual selection+wrapping.",
+    "StyleControls.jsx PRESET_COLORS uses aria-label 'Välj färg <color>' but does NOT expose data-testid on each preset button. Adding e.g. data-testid={`${testidPrefix}-preset-${c}`} on presets would improve test targetability (currently required a JS aria-label workaround).",
+    "In Landing.jsx HeroSection, bubbleNode is rendered inside the image container when config.image_url is present (line 131), but only INSIDE the left text column when image_url is missing (line 124). This means the position dropdown ('top-right', 'top-left', ...) actually positions relative to the image container in the common case — behavior is correct here but may confuse admins who expect page-level positioning.",
+    "The RichTextEditor's onBlur re-emits innerHTML which can cause a state loop with contentEditable in edge cases; consider debouncing or gating onChange.",
+    "escapeAsHtml helper only splits on double-newlines and does not sanitize (only escapes <, >, &). Since content_html is later rendered via dangerouslySetInnerHTML on the public site, admin XSS is technically possible (admin already trusted, but note for future public-user editors)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin habib.nazary@hotmail.com / Jordgubbe234@u (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None persisted. Existing hero.config.discount left in final state {enabled:true, title:'40% RABATT', subtitle:'Kod: TEST40', link:'/registrera-fagel', position:'top-left'} and hero.config.style.title_color='#B91C1C'. Existing text_block section 'Textblock (Om registret)' content_html was overwritten to '<b>Hello bold world</b>' and its visibility toggled to visible. If the previous copy needs to be restored, main agent should re-seed. No new persistent sections were created (added cta_banner was deleted at end).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All discount-bubble + StyleEditor + RichTextEditor flows verified working via Playwright against the public URL. If admin wants to restore original hero copy (default discount was 20% RABATT / Kod: FAGEL20 / top-right) or original text_block content ('Skydd genom gemenskap' title with legacy content), do that manually in admin.",
+  "detailed_results": {
+    "hidden_when_disabled": "PASS - bubble absent when discount.enabled toggled off; reappears after re-enable",
+    "admin_hero_discount_testids_present": "PASS - config-discount-enabled/title/subtitle/link/bg/text-color/position all found",
+    "save_updates_bubble_on_public": "PASS - saved 40% RABATT / Kod: TEST40 / /registrera-fagel and bubble rendered on public /",
+    "bubble_click_navigation": "PASS - clicking hero-discount-bubble navigates to /registrera-fagel",
+    "position_top_left": "PASS - after saving position='top-left', bubble class contains top-4 left-4 on public",
+    "hero_styleeditor_present": "PASS - hero-style-font, hero-style-title-color, hero-style-text-color, hero-style-align-left/center/right all found",
+    "hero_title_color_persists": "PASS - selecting #B91C1C preset persists; public h1 inline style becomes 'color: rgb(185, 28, 28)' (visible red heading in screenshot)",
+    "text_block_rich_editor_testids": "PASS - config-content-html + rte-bold/italic/underline/link/insertUnorderedList/insertOrderedList all found",
+    "bold_wrap_and_public_render": "PASS - execCommand('bold') wrapped 'Hello bold world' in <b>; saved to config.content_html; public renders <b>Hello bold world</b> inside .rte-content",
+    "text_block_styleeditor_present": "PASS - text-style-font/title-color/text-color/align-* all found",
+    "cta_banner_styleeditor_present": "PASS - cta-style-font/title-color/text-color/align-left/center/right all found on newly-created cta_banner",
+    "persistence_after_logout": "PASS - after logout, public / still shows 40% RABATT bubble at top-left and red hero H1"
+  },
+  "rca_of_issues": "No user-facing issues. During testing I hit two automation-only quirks: (a) urllib to /api/homepage returned 403 (Cloudflare bot block on Python UA — unrelated to app); (b) initial attempt to set the color via the sibling text Input required using the native HTMLInputElement value setter because shadcn Input is a controlled React component — this is standard behavior, not a bug. Workaround: clicking the built-in #B91C1C preset color button worked cleanly."
+}
