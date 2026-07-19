@@ -16,6 +16,7 @@ export default function Contact() {
         phone: "",
         subject: "",
         message: "",
+        website: "", // honeypot – always empty for real users
     });
     const [busy, setBusy] = useState(false);
     const [sent, setSent] = useState(false);
@@ -29,7 +30,7 @@ export default function Contact() {
             await api.post("/contact", payload);
             setSent(true);
             toast.success("Tack! Vi återkommer så snart vi kan.");
-            setForm({ name: "", email: "", phone: "", subject: "", message: "" });
+            setForm({ name: "", email: "", phone: "", subject: "", message: "", website: "" });
         } catch (err) {
             toast.error(formatApiError(err));
         } finally {
@@ -141,6 +142,31 @@ export default function Contact() {
                         className="surface p-6 space-y-5 fade-in"
                         data-testid="contact-form"
                     >
+                        {/* Honeypot – hidden from users, catches bots */}
+                        <div
+                            aria-hidden="true"
+                            style={{
+                                position: "absolute",
+                                left: "-10000px",
+                                top: "auto",
+                                width: "1px",
+                                height: "1px",
+                                overflow: "hidden",
+                            }}
+                        >
+                            <label htmlFor="website">Webbplats (lämna tomt)</label>
+                            <input
+                                id="website"
+                                name="website"
+                                type="text"
+                                tabIndex={-1}
+                                autoComplete="off"
+                                value={form.website}
+                                onChange={(e) =>
+                                    setForm({ ...form, website: e.target.value })
+                                }
+                            />
+                        </div>
                         <div className="grid sm:grid-cols-2 gap-4">
                             <div>
                                 <Label htmlFor="name">Namn *</Label>

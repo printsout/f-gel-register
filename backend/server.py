@@ -260,6 +260,8 @@ class ContactMessageInput(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=40)
     subject: str = Field(min_length=1, max_length=200)
     message: str = Field(min_length=1, max_length=5000)
+    # Honeypot – legitimate browser users leave this empty. Bots often fill every input.
+    website: Optional[str] = Field(default=None, max_length=200)
 
 
 class CommentInput(BaseModel):
@@ -840,14 +842,35 @@ async def list_feedback_public():
 
 
 @api.post("/contact")
-async def submit_contact_message(data: ContactMessageInput):
+async def submit_contact_message(data: ContactMessageInput, request: Request):
+    # 1) Honeypot – if hidden field is filled, silently accept (return success so bot moves on)
+    if data.website:
+        logger.info("Contact honeypot triggered from %s", request.client.host if request.client else "?")
+        return {"success": True, "id": str(uuid.uuid4())}
+
+    # 2) Rate limit — max 3 messages / hour per IP or per email
+    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() \
+        or (request.client.host if request.client else "unknown")
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    recent = await db.contact_messages.count_documents({
+        "created_at": {"$gte": one_hour_ago},
+        "$or": [{"ip": ip}, {"email": data.email.lower()}],
+    })
+    if recent >= 3:
+        raise HTTPException(
+            status_code=429,
+            detail="För många meddelanden på kort tid — vänta en stund och försök igen.",
+        )
+
     doc = {
         "id": str(uuid.uuid4()),
         "name": data.name,
-        "email": data.email,
+        "email": data.email.lower(),
         "phone": data.phone,
         "subject": data.subject,
         "message": data.message,
+        "ip": ip,
+        "user_agent": request.headers.get("user-agent", "")[:255],
         "status": "new",  # new | read | responded | archived
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

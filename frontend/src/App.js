@@ -30,6 +30,7 @@ import AdminMissingBirds from "@/pages/admin/MissingBirds";
 import AdminContent from "@/pages/admin/Content";
 import AdminHomepage from "@/pages/admin/Homepage";
 import AdminMenu from "@/pages/admin/Menu";
+import AdminPaymentPlans from "@/pages/admin/PaymentPlans";
 
 function AppRoutes() {
     const location = useLocation();
@@ -153,6 +154,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <Activity />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/payment-plans"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <AdminPaymentPlans />
                     </ProtectedRoute>
                 }
             />
