@@ -1,13 +1,15 @@
-import { Link } from "react-router-dom";
-import { ArrowLeft } from "@phosphor-icons/react";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowLeft, ShoppingCartSimple } from "@phosphor-icons/react";
 
 /**
  * Shared header for public sub-pages.
  * Left: "Tillbaka" back-link to / (or backTo prop)
  * Center: clickable logo → /
- * Right: uppercase label (e.g. page title)
+ * Right: cart icon (→ /registrera-fagel) + uppercase label (e.g. page title)
  */
 export default function BackHeader({ label, backTo = "/" }) {
+    const { pathname } = useLocation();
+    const onCheckout = pathname.startsWith("/registrera-fagel");
     return (
         <header
             className="border-b border-border bg-card sticky top-0 z-30"
@@ -34,12 +36,29 @@ export default function BackHeader({ label, backTo = "/" }) {
                         className="h-10 w-auto transition-transform group-hover:scale-105"
                     />
                 </Link>
-                <span
-                    className="label-caps justify-self-end truncate max-w-[180px]"
-                    data-testid="back-header-label"
-                >
-                    {label}
-                </span>
+                <div className="justify-self-end flex items-center gap-3">
+                    {!onCheckout && (
+                        <Link
+                            to="/registrera-fagel"
+                            aria-label="Till kassan – registrera fågel"
+                            data-testid="nav-checkout-icon"
+                            className="relative inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-card hover:bg-primary/10 hover:border-primary/40 transition-colors group"
+                        >
+                            <ShoppingCartSimple
+                                size={20}
+                                weight="duotone"
+                                className="text-foreground group-hover:text-primary transition-colors"
+                            />
+                            <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />
+                        </Link>
+                    )}
+                    <span
+                        className="label-caps truncate max-w-[140px]"
+                        data-testid="back-header-label"
+                    >
+                        {label}
+                    </span>
+                </div>
             </div>
         </header>
     );
