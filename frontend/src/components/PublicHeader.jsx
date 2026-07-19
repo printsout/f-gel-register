@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CaretDown, SignIn } from "@phosphor-icons/react";
+import { CaretDown, SignIn, ShoppingCartSimple } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -110,6 +110,19 @@ export default function PublicHeader() {
                 </nav>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
+                    <Link
+                        to="/registrera-fagel"
+                        aria-label="Till kassan – registrera fågel"
+                        data-testid="nav-checkout-icon"
+                        className="relative inline-flex items-center justify-center h-9 w-9 rounded-md border border-border bg-card hover:bg-primary/10 hover:border-primary/40 transition-colors group"
+                    >
+                        <ShoppingCartSimple
+                            size={20}
+                            weight="duotone"
+                            className="text-foreground group-hover:text-primary transition-colors"
+                        />
+                        <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />
+                    </Link>
                     {user ? (
                         <>
                             <Link to="/mina-faglar">
