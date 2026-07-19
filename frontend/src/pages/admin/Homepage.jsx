@@ -249,13 +249,48 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                         </div>
                         {disc.enabled && (
                             <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
-                                <TextField
-                                    label="Rubrik (kort)"
-                                    value={disc.title}
-                                    onChange={(v) => patchDiscount({ title: v })}
-                                    placeholder="20% RABATT"
-                                    testid="config-discount-title"
-                                />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <Label className="label-caps">Rabatt-typ</Label>
+                                        <Select
+                                            value={disc.type || "percent"}
+                                            onValueChange={(v) => patchDiscount({ type: v })}
+                                        >
+                                            <SelectTrigger className="mt-1" data-testid="config-discount-type">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="percent">Procent (%)</SelectItem>
+                                                <SelectItem value="amount">Kronor (kr)</SelectItem>
+                                                <SelectItem value="custom">Egen text</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {disc.type !== "custom" && (
+                                        <div>
+                                            <Label className="label-caps">Värde</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={disc.value ?? ""}
+                                                onChange={(e) => patchDiscount({ value: e.target.value === "" ? null : Number(e.target.value) })}
+                                                placeholder={disc.type === "amount" ? "50" : "20"}
+                                                className="mt-1"
+                                                data-testid="config-discount-value"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                                {disc.type === "custom" && (
+                                    <TextField
+                                        label="Egen rubrik"
+                                        value={disc.title}
+                                        onChange={(v) => patchDiscount({ title: v })}
+                                        placeholder="Ex. BLACK FRIDAY"
+                                        testid="config-discount-title"
+                                    />
+                                )}
                                 <TextField
                                     label="Underrubrik"
                                     value={disc.subtitle}
@@ -270,6 +305,23 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                                     placeholder="/registrera-fagel"
                                     testid="config-discount-link"
                                 />
+                                <div>
+                                    <Label className="label-caps">Bubbel-storlek</Label>
+                                    <Select
+                                        value={disc.size || "md"}
+                                        onValueChange={(v) => patchDiscount({ size: v })}
+                                    >
+                                        <SelectTrigger className="mt-1" data-testid="config-discount-size">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="sm">Liten (72 px)</SelectItem>
+                                            <SelectItem value="md">Medium (100 px)</SelectItem>
+                                            <SelectItem value="lg">Stor (128 px)</SelectItem>
+                                            <SelectItem value="xl">Extra stor (160 px)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <Label className="label-caps">Bakgrund</Label>

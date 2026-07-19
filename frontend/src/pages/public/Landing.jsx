@@ -45,7 +45,9 @@ function HeroSection({ config, user, isAdmin }) {
     const titleStyle = styleFor(s, "title");
     const bodyStyle = styleFor(s, "text");
     const disc = config.discount || {};
-    const showBubble = disc.enabled && (disc.title || disc.subtitle);
+    const showBubble = disc.enabled && (
+        disc.title || disc.subtitle || disc.value != null || disc.type === "custom"
+    );
     const pos = disc.position || "top-right";
     const posClass = {
         "top-right": "top-4 right-4",
@@ -54,26 +56,57 @@ function HeroSection({ config, user, isAdmin }) {
         "bottom-left": "bottom-4 left-4",
     }[pos] || "top-4 right-4";
 
+    // Bubble size classes
+    const size = disc.size || "md";
+    const sizeMap = {
+        sm: { box: "h-[72px] w-[72px] md:h-20 md:w-20", title: "text-xs md:text-sm", sub: "text-[9px] md:text-[10px]" },
+        md: { box: "h-24 w-24 md:h-28 md:w-28", title: "text-base md:text-lg", sub: "text-[10px] md:text-xs" },
+        lg: { box: "h-32 w-32 md:h-36 md:w-36", title: "text-xl md:text-2xl", sub: "text-xs md:text-sm" },
+        xl: { box: "h-40 w-40 md:h-44 md:w-44", title: "text-2xl md:text-3xl", sub: "text-sm md:text-base" },
+    };
+    const sz = sizeMap[size] || sizeMap.md;
+
+    // Derive title: for percent/amount always compute from value; for 'custom' use title.
+    let bubbleTitle = null;
+    if (disc.type === "custom") {
+        bubbleTitle = disc.title;
+    } else if (disc.type === "amount" && disc.value != null && disc.value !== "") {
+        bubbleTitle = `${disc.value} KR`;
+    } else if ((disc.type === "percent" || !disc.type) && disc.value != null && disc.value !== "") {
+        bubbleTitle = `${disc.value}%`;
+    } else {
+        // fallback for legacy configs that only had disc.title
+        bubbleTitle = disc.title;
+    }
+    // Add "RABATT" label under the value when it's a numeric one
+    const isNumeric = disc.type !== "custom" && (disc.value != null && disc.value !== "");
+    const label = isNumeric ? "RABATT" : null;
+
     const BubbleWrapper = disc.link ? Link : "div";
     const wrapperProps = disc.link ? { to: disc.link } : {};
 
     const bubbleNode = showBubble ? (
         <BubbleWrapper
             {...wrapperProps}
-            className={`absolute z-10 ${posClass} inline-flex flex-col items-center justify-center h-24 w-24 md:h-28 md:w-28 rounded-full shadow-lg rotate-[-8deg] hover:scale-105 hover:rotate-0 transition-transform ${disc.link ? "cursor-pointer" : ""}`}
+            className={`absolute z-10 ${posClass} inline-flex flex-col items-center justify-center ${sz.box} rounded-full shadow-lg rotate-[-8deg] hover:scale-105 hover:rotate-0 transition-transform ${disc.link ? "cursor-pointer" : ""}`}
             style={{
                 background: disc.bg_color || "hsl(var(--primary))",
                 color: disc.text_color || "#ffffff",
             }}
             data-testid="hero-discount-bubble"
         >
-            {disc.title && (
-                <span className="font-display font-black text-base md:text-lg leading-tight text-center px-2">
-                    {disc.title}
+            {bubbleTitle && (
+                <span className={`font-display font-black ${sz.title} leading-tight text-center px-2`}>
+                    {bubbleTitle}
+                </span>
+            )}
+            {label && (
+                <span className={`${sz.sub} uppercase tracking-wider opacity-95 leading-none`}>
+                    {label}
                 </span>
             )}
             {disc.subtitle && (
-                <span className="text-[10px] md:text-xs uppercase tracking-wider opacity-95 mt-0.5 text-center px-1">
+                <span className={`${sz.sub} uppercase tracking-wider opacity-95 mt-0.5 text-center px-1`}>
                     {disc.subtitle}
                 </span>
             )}
