@@ -2732,6 +2732,94 @@ async def get_payment_status(session_id: str):
     }
 
 
+async def _handle_subscription_renewal(invoice: dict) -> dict:
+    """When Stripe auto-charges the yearly membership, extend our own bookkeeping.
+
+    invoice.billing_reason is 'subscription_cycle' for renewals and
+    'subscription_create' for the very first charge (already handled by
+    checkout.session.completed → _activate_payment_for_session). We skip the
+    first-charge case here to stay idempotent.
+    """
+    subscription_id = invoice.get("subscription")
+    if not subscription_id:
+        return {"skipped": "no subscription"}
+    billing_reason = invoice.get("billing_reason")
+    if billing_reason == "subscription_create":
+        return {"skipped": "initial charge (already activated)"}
+
+    now_utc = datetime.now(timezone.utc)
+    next_due = (now_utc.date() + timedelta(days=365)).isoformat()
+    paid_iso = now_utc.date().isoformat()
+
+    # Extend all payment plans tied to this subscription
+    plan_result = await db.payment_plans.update_many(
+        {"stripe_subscription_id": subscription_id},
+        {"$set": {
+            "status": "active",
+            "last_payment_date": paid_iso,
+            "next_due_date": next_due,
+            "updated_at": now_utc.isoformat(),
+        }},
+    )
+
+    # Also extend the linked bird's annual_fee_paid_until
+    plans_cursor = db.payment_plans.find(
+        {"stripe_subscription_id": subscription_id}, {"_id": 0, "bird_id": 1}
+    )
+    bird_ids = [p["bird_id"] async for p in plans_cursor if p.get("bird_id")]
+    if bird_ids:
+        await db.registered_birds.update_many(
+            {"id": {"$in": bird_ids}},
+            {"$set": {"annual_fee_paid_until": next_due, "payment_status": "completed"}},
+        )
+
+    # Refresh the user's membership window
+    user_result = await db.users.update_many(
+        {"stripe_subscription_id": subscription_id},
+        {"$set": {
+            "membership_active": True,
+            "membership_next_due": next_due,
+            "updated_at": now_utc.isoformat(),
+        }},
+    )
+
+    # Record the renewal payment for audit
+    await db.subscription_renewals.insert_one({
+        "id": str(uuid.uuid4()),
+        "stripe_invoice_id": invoice.get("id"),
+        "stripe_subscription_id": subscription_id,
+        "stripe_customer_id": invoice.get("customer"),
+        "amount_paid": invoice.get("amount_paid"),
+        "currency": invoice.get("currency"),
+        "billing_reason": billing_reason,
+        "next_due_date": next_due,
+        "created_at": now_utc.isoformat(),
+    })
+
+    return {
+        "plans_updated": plan_result.modified_count,
+        "users_updated": user_result.modified_count,
+        "birds_updated": len(bird_ids),
+    }
+
+
+async def _handle_subscription_cancelled(subscription: dict) -> dict:
+    """When Stripe subscription is cancelled/ended, mark our plan+user accordingly."""
+    subscription_id = subscription.get("id")
+    if not subscription_id:
+        return {"skipped": "no subscription id"}
+    now = datetime.now(timezone.utc).isoformat()
+    plan_result = await db.payment_plans.update_many(
+        {"stripe_subscription_id": subscription_id},
+        {"$set": {"status": "cancelled", "updated_at": now}},
+    )
+    user_result = await db.users.update_many(
+        {"stripe_subscription_id": subscription_id},
+        {"$set": {"membership_active": False, "updated_at": now}},
+    )
+    return {"plans": plan_result.modified_count, "users": user_result.modified_count}
+
+
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
     payload = await request.body()
@@ -2745,6 +2833,18 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid payload")
 
     obj, event_type = event["data"]["object"], event["type"]
+
+    # Idempotency: skip if we've already seen this event
+    if event.get("id"):
+        already = await db.stripe_events.find_one({"event_id": event["id"]})
+        if already:
+            return {"status": "duplicate", "event_id": event["id"]}
+        await db.stripe_events.insert_one({
+            "event_id": event["id"],
+            "type": event_type,
+            "received_at": datetime.now(timezone.utc).isoformat(),
+        })
+
     if event_type == "checkout.session.completed":
         await _activate_payment_for_session(obj["id"], stripe_session=obj)
     elif event_type == "checkout.session.async_payment_succeeded":
@@ -2761,6 +2861,19 @@ async def stripe_webhook(request: Request):
             {"$set": {"status": "expired", "payment_status": "expired",
                       "updated_at": datetime.now(timezone.utc).isoformat()}},
         )
+    elif event_type == "invoice.payment_succeeded":
+        result = await _handle_subscription_renewal(obj)
+        logger.info("Subscription renewal handled: %s", result)
+    elif event_type == "invoice.payment_failed":
+        subscription_id = obj.get("subscription")
+        if subscription_id:
+            await db.payment_plans.update_many(
+                {"stripe_subscription_id": subscription_id},
+                {"$set": {"status": "past_due",
+                          "updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+    elif event_type == "customer.subscription.deleted":
+        await _handle_subscription_cancelled(obj)
     return {"status": "ok"}
 
 
