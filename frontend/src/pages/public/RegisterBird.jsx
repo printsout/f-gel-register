@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Bird } from "@phosphor-icons/react";
 import api, { formatApiError } from "@/lib/api";
@@ -25,6 +25,7 @@ import { ShieldCheck, Key, CheckCircle } from "@phosphor-icons/react";
 export default function RegisterBird() {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const [searchParams] = useSearchParams();
     const [busy, setBusy] = useState(false);
     const [successData, setSuccessData] = useState(null);
     const [form, setForm] = useState({
@@ -37,6 +38,16 @@ export default function RegisterBird() {
         discount_code: "",
         accept: false,
     });
+
+    // Prefill discount_code from URL (?discount=CODE) — used by hero rabatt-bubbla
+    useEffect(() => {
+        const code = searchParams.get("discount");
+        if (code) {
+            setForm((f) => (f.discount_code ? f : { ...f, discount_code: code.toUpperCase() }));
+            toast.success(`Rabattkod ${code.toUpperCase()} tillämpad!`);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const submit = async (e) => {
         e.preventDefault();

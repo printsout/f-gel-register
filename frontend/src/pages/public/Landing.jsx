@@ -83,7 +83,11 @@ function HeroSection({ config, user, isAdmin }) {
     const label = isNumeric ? "RABATT" : null;
 
     const BubbleWrapper = disc.link ? Link : "div";
-    const wrapperProps = disc.link ? { to: disc.link } : {};
+    // Append ?discount=CODE so RegisterBird auto-fills the linked code
+    const bubbleHref = disc.link && disc.code
+        ? `${disc.link}${disc.link.includes("?") ? "&" : "?"}discount=${encodeURIComponent(disc.code)}`
+        : disc.link;
+    const wrapperProps = disc.link ? { to: bubbleHref } : {};
 
     const bubbleNode = showBubble ? (
         <BubbleWrapper

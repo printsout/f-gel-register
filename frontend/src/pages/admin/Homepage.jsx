@@ -209,6 +209,22 @@ function ConfigField({ section, updateConfig, patchConfig }) {
         case "hero": {
             const disc = c.discount || {};
             const patchDiscount = (d) => patchConfig({ discount: { ...disc, ...d } });
+            const linkedCode = (window.__discountCodes || []).find((x) => x.id === disc.code_id);
+            const applyLinkedCode = (id) => {
+                if (id === "__none") {
+                    patchDiscount({ code_id: null, code: null });
+                    return;
+                }
+                const dc = (window.__discountCodes || []).find((x) => x.id === id);
+                if (!dc) return;
+                patchDiscount({
+                    code_id: dc.id,
+                    code: dc.code,
+                    type: "percent",
+                    value: dc.discount_percentage,
+                    subtitle: `Kod: ${dc.code}`,
+                });
+            };
             return (
                 <div className="space-y-4">
                     <TextField label="Förrubrik (eyebrow)" value={c.eyebrow} onChange={(v) => patchConfig({ eyebrow: v })} placeholder="Personliga produkter" testid="config-eyebrow" />
@@ -249,12 +265,54 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                         </div>
                         {disc.enabled && (
                             <div className="space-y-3 rounded-md border border-primary/30 bg-primary/5 p-3">
+                                {/* Länka till rabattkod */}
+                                <div>
+                                    <Label className="label-caps">
+                                        Rabattkod (koppla från Rabattkoder)
+                                    </Label>
+                                    <Select
+                                        value={disc.code_id || "__none"}
+                                        onValueChange={applyLinkedCode}
+                                    >
+                                        <SelectTrigger
+                                            className="mt-1"
+                                            data-testid="config-discount-code-id"
+                                        >
+                                            <SelectValue placeholder="Ingen — sätt värdet manuellt" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none">
+                                                Ingen (manuellt värde)
+                                            </SelectItem>
+                                            {(window.__discountCodes || [])
+                                                .filter((d) => d.is_active)
+                                                .map((d) => (
+                                                    <SelectItem
+                                                        key={d.id}
+                                                        value={d.id}
+                                                    >
+                                                        {d.code} — {d.discount_percentage}%{" "}
+                                                        {d.usage_limit
+                                                            ? `(${d.used_count}/${d.usage_limit})`
+                                                            : ""}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {linkedCode && (
+                                        <p className="text-xs text-primary mt-1.5">
+                                            ✓ Kopplad: <strong>{linkedCode.code}</strong> ·{" "}
+                                            {linkedCode.discount_percentage}% · klick på bubblan applicerar koden automatiskt vid registrering
+                                        </p>
+                                    )}
+                                </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <Label className="label-caps">Rabatt-typ</Label>
                                         <Select
                                             value={disc.type || "percent"}
                                             onValueChange={(v) => patchDiscount({ type: v })}
+                                            disabled={!!disc.code_id}
                                         >
                                             <SelectTrigger className="mt-1" data-testid="config-discount-type">
                                                 <SelectValue />
@@ -277,6 +335,7 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                                                 onChange={(e) => patchDiscount({ value: e.target.value === "" ? null : Number(e.target.value) })}
                                                 placeholder={disc.type === "amount" ? "50" : "20"}
                                                 className="mt-1"
+                                                disabled={!!disc.code_id}
                                                 data-testid="config-discount-value"
                                             />
                                         </div>
@@ -529,6 +588,18 @@ export default function AdminHomepage() {
             setLoading(false);
         }
     };
+
+    // Load discount codes into a window-scoped cache so the Hero config editor can
+    // populate its 'Rabattkod' dropdown without prop-drilling deep into ConfigField.
+    useEffect(() => {
+        api.get("/admin/discount-codes")
+            .then(({ data }) => {
+                window.__discountCodes = data;
+            })
+            .catch(() => {
+                window.__discountCodes = [];
+            });
+    }, []);
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only testing of the new 'Rabattkod-koppling' feature in Startsida-byggare hero discount bubble. All 11 review scenarios PASSED end-to-end against the public URL. One environmental issue discovered and self-fixed (stale webpack bundle for public pages, resolved by supervisor restart of frontend).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_15.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RegisterBird.jsx useEffect toast: In React dev/StrictMode the effect runs twice on mount so `toast.success('Rabattkod ... tillämpad!')` fires twice (observed 2 toasts in test). The guard `f.discount_code ? f : { ...f, discount_code: code }` protects state but not the toast call. In production this is a no-op (StrictMode doesn't double-invoke in prod), but consider guarding the toast the same way to keep dev cleaner (e.g. useRef flag or move toast inside the same guard).",
+    "Landing.jsx bubbleHref: current logic only appends `?discount=CODE` when BOTH `disc.link` AND `disc.code` exist. If admin manually clears the link but keeps a code, no navigation happens which is expected — fine. If admin only sets a code without a link, the bubble becomes a plain <div> and the code is silently unused. Consider surfacing a small admin hint when disc.code is set but disc.link is empty.",
+    "Homepage.jsx window.__discountCodes side-channel: using `window.__discountCodes` to bridge data from the parent load() into ConfigField is a code smell (loses reactivity — if a new code is created in another admin tab, this list is stale until page refresh). Consider passing the list as a prop or via React context.",
+    "Homepage.jsx file size is now ~966 lines (grew from 843 in iter_14) — well past the 700-line threshold. Splitting ConfigField per-section into its own module (HeroConfig.jsx, TextBlockConfig.jsx, CtaBannerConfig.jsx, FeaturesConfig.jsx, EmergencyCtaConfig.jsx) is now overdue.",
+    "Landing.jsx: `disc.code` is used to construct the query param but is never sanitized. Since only admin sets it and it comes from the DB, low risk — but encodeURIComponent is applied which is good.",
+    "RegisterBird.jsx uses `searchParams.get('discount')` but the useEffect deps array is `[]` with eslint-disable. If the URL query changes after mount (e.g. via `navigate('?discount=X')`), the field won't re-prefill. Not required for the current flow but note."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "admin habib.nazary@hotmail.com / Jordgubbe234@u (from /app/memory/test_credentials.md). Discount codes: PARROTS15 (15%), UICODE5665 (10%).",
+  "seed_data_creation": "Existing hero.config.discount was mutated during testing. Final persisted state: {enabled:true, type:'percent', value:15, subtitle:'Kod: PARROTS15', link:'/registrera-fagel', bg_color:'#FF5C00', text_color:'#ffffff', position:'top-right', size:'xl', code_id:'07ba8ecc-7c78-4657-8438-393385839b91', code:'PARROTS15'}. If original state (was recently type:'amount', value:100, subtitle:'Kod: medlem') needs to be restored, admin can select 'Ingen (manuellt värde)' in the dropdown and re-enter manual values.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Feature verified. Discount-code linking end-to-end works. IMPORTANT env note: after main-agent updates to /app/frontend/src/pages/public/*.jsx, sometimes webpack HMR does not compile the changes into bundle.js served through the ingress. If pubic-page tests fail unexpectedly, `sudo supervisorctl restart frontend` + wait 8-10s + re-test. The admin bundle was fresh but /app/frontend/src/pages/public/Landing.jsx and RegisterBird.jsx code was missing from the served bundle until frontend was restarted (grep for `?discount=` and `tillämpad` in /static/js/bundle.js to verify).",
+  "detailed_results": {
+    "1_rabattkod_dropdown_visible": "PASS - [data-testid=config-discount-code-id] renders inside Rabatt-bubbla section",
+    "2_dropdown_lists_active_codes": "PASS - options: ['Ingen (manuellt värde)', 'UICODE5665 — 10% ', 'PARROTS15 — 15% (0/100)']",
+    "3_selecting_code_autofills": "PASS - selecting PARROTS15 sets type='Procent (%)', value='15', subtitle='Kod: PARROTS15'",
+    "4_manual_fields_disabled_when_linked": "PASS - config-discount-type and config-discount-value both is_disabled=True after linking",
+    "5_confirmation_line": "PASS - '✓ Kopplad: PARROTS15 · 15% · klick på bubblan applicerar koden automatiskt vid registrering' rendered",
+    "6_save_and_reload_persists_code": "PASS - Sparat toast → reload /admin/homepage → click hero → Kopplad line and disabled state persist. API GET /api/admin/homepage returns code_id + code fields.",
+    "7_public_bubble_shows_derived_value": "PASS - public / renders '15% RABATT Kod: PARROTS15' via hero-discount-bubble",
+    "8_bubble_navigates_with_discount_param": "PASS - anchor href='/registrera-fagel?discount=PARROTS15'; clicking navigates to that URL",
+    "9_register_form_prefill_and_toast": "PASS - input-discount-code prefilled with 'PARROTS15'; toast 'Rabattkod PARROTS15 tillämpad!' shown (fires twice in dev StrictMode - not a prod bug)",
+    "9b_lowercase_query_uppercased": "PASS - ?discount=parrots15 → input-discount-code = 'PARROTS15'",
+    "10_switch_back_to_ingen_unlocks": "PASS - selecting 'Ingen (manuellt värde)' re-enables both config-discount-type and config-discount-value",
+    "11_no_discount_param_when_unlinked": "PASS - after saving 'Ingen', public bubble href = '/registrera-fagel' (no ?discount=)"
+  },
+  "rca_of_issues": "Initial run showed href_has_discount_param=FAIL, register_prefill=FAIL, toast=FAIL despite the API returning code:'PARROTS15'. Root cause: the webpack dev server had hot-reloaded /app/frontend/src/pages/admin/Homepage.jsx but had NOT rebuilt the changes in /app/frontend/src/pages/public/Landing.jsx and /app/frontend/src/pages/public/RegisterBird.jsx into the served bundle.js. Confirmed by grepping the served bundle - the strings '?discount=' and 'tillämpad' were absent. Fixed by `sudo supervisorctl restart frontend` which produced a fresh compile; all subsequent tests passed. No source-code fix was needed on either file — the review-requested feature is correctly implemented as authored."
+}
