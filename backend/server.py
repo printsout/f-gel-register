@@ -308,6 +308,26 @@ class ContactMessageInput(BaseModel):
     website: Optional[str] = Field(default=None, max_length=200)
 
 
+class OwnershipTransferInput(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    bird_id: str = Field(min_length=1)
+    # Current owner data (prefilled from account but re-entered to keep on-record)
+    from_owner_name: str = Field(min_length=1, max_length=120)
+    from_owner_email: EmailStr
+    from_owner_phone: str = Field(min_length=6, max_length=40)
+    from_owner_address: str = Field(min_length=1, max_length=250)
+    # New owner data
+    to_owner_name: str = Field(min_length=1, max_length=120)
+    to_owner_email: EmailStr
+    to_owner_phone: str = Field(min_length=6, max_length=40)
+    to_owner_address: str = Field(min_length=1, max_length=250)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class OwnershipTransferDecision(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=1000)
+
+
 class CommentInput(BaseModel):
     comment_text: str = Field(min_length=1)
     commenter_name: str = Field(min_length=1)
@@ -704,6 +724,115 @@ def _build_registration_confirmation_html(
 """
 
 
+def _transfer_email_wrapper(title: str, body_html: str) -> str:
+    return f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <tr><td align="center">
+    <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#0D2B1D;padding:20px 24px;">
+        <div style="color:#ffffff;font-size:14px;letter-spacing:2px;text-transform:uppercase;opacity:0.75;">Fågelregister</div>
+        <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px;">{title}</div>
+      </td></tr>
+      <tr><td style="padding:24px;">{body_html}</td></tr>
+    </table>
+  </td></tr>
+</table>
+"""
+
+
+def _build_transfer_admin_notice_html(t: dict) -> str:
+    body = f"""
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">
+      En ny ägarbytebegäran har inkommit och väntar på godkännande.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;margin:16px 0;font-size:14px;">
+      <tr><td style="padding:8px 0;color:#6b7280;">Fågel</td><td style="padding:8px 0;text-align:right;">{t.get('species','')} ({t.get('ring_number','')})</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280;">Nuvarande ägare</td><td style="padding:8px 0;text-align:right;">{t.get('from_owner_name','')} — {t.get('from_owner_email','')}</td></tr>
+      <tr><td style="padding:8px 0;color:#6b7280;">Ny ägare</td><td style="padding:8px 0;text-align:right;">{t.get('to_owner_name','')} — {t.get('to_owner_email','')}</td></tr>
+    </table>
+    <p style="font-size:14px;color:#6b7280;">Logga in i adminpanelen för att godkänna eller avslå.</p>
+    """
+    return _transfer_email_wrapper("Ny ägarbytebegäran", body)
+
+
+def _build_transfer_approved_html_from(t: dict, grace_until: str) -> str:
+    body = f"""
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Hej {t.get('from_owner_name','')},</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">
+      Ditt ägarbyte har godkänts. <strong>{t.get('to_owner_name','')}</strong> är nu registrerad ägare
+      av <strong>{t.get('species','')}</strong> med ringnummer <strong>{t.get('ring_number','')}</strong>.
+    </p>
+    <p style="font-size:14px;color:#6b7280;line-height:1.6;">
+      Den nya ägaren har fram till {grace_until} på sig att betala medlemsavgiften.
+      Tack för att du använder Fågelregister.
+    </p>
+    """
+    return _transfer_email_wrapper("Ägarbytet är godkänt", body)
+
+
+def _build_transfer_approved_html_to(t: dict, grace_until: str, temp_password: Optional[str]) -> str:
+    creds_block = ""
+    if temp_password:
+        creds_block = f"""
+        <p style="font-size:14px;line-height:1.6;margin:16px 0 8px;">Vi har skapat ett konto åt dig så du kan hantera fågeln:</p>
+        <table cellpadding="0" cellspacing="0" style="margin:0 0 16px;font-family:monospace;font-size:13px;background:#f4f4f5;border-radius:6px;padding:8px 12px;">
+          <tr><td style="padding:4px 12px;color:#6b7280;">E-post:</td><td style="padding:4px 12px;">{t.get('to_owner_email','')}</td></tr>
+          <tr><td style="padding:4px 12px;color:#6b7280;">Tempoärt lösenord:</td><td style="padding:4px 12px;">{temp_password}</td></tr>
+        </table>
+        <p style="font-size:13px;color:#6b7280;">Byt lösenord första gången du loggar in.</p>
+        """
+    body = f"""
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Hej,</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">
+      Vi vill informera om att ägarbytet nu har genomförts.
+    </p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">
+      Du är nu registrerad ägare av <strong>{t.get('species','')}</strong> med ringnummer
+      <strong>{t.get('ring_number','')}</strong>.
+    </p>
+    {creds_block}
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 16px;margin:16px 0;">
+      <p style="font-size:14px;font-weight:600;margin:0 0 4px;color:#9a3412;">Registreringsavgift 300 kr — betala inom 14 dagar</p>
+      <p style="font-size:14px;color:#7c2d12;line-height:1.6;margin:0;">
+        Den nya ägaren ansvarar för att betala registreringsavgiften på <strong>300 kr</strong>.
+        Betalningen ska vara genomförd inom 14 dagar från datumet för detta meddelande
+        (senast <strong>{grace_until}</strong>).
+      </p>
+      <p style="font-size:13px;color:#7c2d12;line-height:1.6;margin:8px 0 0;">
+        Om registreringsavgiften inte betalas inom angiven tid kan registreringen komma att
+        försenas eller påverkas enligt gällande regler.
+      </p>
+    </div>
+    <p style="font-size:14px;color:#374151;line-height:1.6;margin:16px 0 0;">
+      Har du några frågor är du välkommen att kontakta oss.
+    </p>
+    <p style="font-size:14px;color:#374151;line-height:1.6;margin:20px 0 0;">
+      Med vänlig hälsning,<br/>
+      <strong>Papegojregister-teamet</strong>
+    </p>
+    """
+    return _transfer_email_wrapper("Ägarbytet är genomfört", body)
+
+
+def _build_transfer_rejected_html(t: dict, reason: str) -> str:
+    reason_block = ""
+    if reason:
+        reason_block = f'<p style="font-size:14px;color:#6b7280;line-height:1.6;background:#f4f4f5;border-radius:6px;padding:12px;"><strong>Motivering:</strong> {reason}</p>'
+    body = f"""
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Hej {t.get('from_owner_name','')},</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">
+      Din begäran om ägarbyte för <strong>{t.get('ring_number','')}</strong> har avslagits.
+    </p>
+    {reason_block}
+    <p style="font-size:14px;color:#6b7280;line-height:1.6;">
+      Kontakta oss om du har frågor så hjälper vi dig gärna vidare.
+    </p>
+    """
+    return _transfer_email_wrapper("Ägarbytet avslogs", body)
+
+
+
+
 @api.post("/auth/reset-password")
 async def reset_password(data: ResetPasswordInput, request: Request):
     """Verify the reset token and set a new password.
@@ -1072,6 +1201,86 @@ async def my_birds(user: dict = Depends(get_current_user)):
     return await cursor.to_list(500)
 
 
+# ----------------------------------------------------------------------------
+# Ownership transfers
+# ----------------------------------------------------------------------------
+def _clean_transfer(t: dict) -> dict:
+    t.pop("_id", None)
+    return t
+
+
+@api.post("/ownership-transfers")
+async def create_ownership_transfer(
+    data: OwnershipTransferInput,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    rate_limit(f"transfer:submit:{user['user_id']}", limit=10, window_seconds=3600)
+    bird = await db.registered_birds.find_one({"id": data.bird_id}, {"_id": 0})
+    if not bird:
+        raise HTTPException(status_code=404, detail="Fågel hittades inte")
+    if bird.get("user_id") != user["user_id"]:
+        raise HTTPException(status_code=403, detail="Du är inte registrerad ägare för denna fågel")
+
+    # Block if a pending transfer already exists for this bird
+    existing = await db.ownership_transfers.find_one({
+        "bird_id": data.bird_id,
+        "status": "pending",
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Det finns redan en pågående ägarbytebegäran för denna fågel")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "bird_id": data.bird_id,
+        "ring_number": bird.get("ring_number"),
+        "species": bird.get("species"),
+        "from_user_id": user["user_id"],
+        "from_owner_name": data.from_owner_name,
+        "from_owner_email": data.from_owner_email.lower(),
+        "from_owner_phone": data.from_owner_phone,
+        "from_owner_address": data.from_owner_address,
+        "to_owner_name": data.to_owner_name,
+        "to_owner_email": data.to_owner_email.lower(),
+        "to_owner_phone": data.to_owner_phone,
+        "to_owner_address": data.to_owner_address,
+        "note": data.note,
+        "status": "pending",
+        "admin_notes": None,
+        "created_at": now_iso,
+        "decided_at": None,
+        "decided_by_admin_id": None,
+    }
+    await db.ownership_transfers.insert_one(doc)
+    await log_activity(user["user_id"], user["email"], "transfer.request", doc["id"], {"bird_id": data.bird_id})
+
+    # Best-effort notice to admin inbox
+    html = _build_transfer_admin_notice_html(doc)
+    await send_platform_email(
+        to=CONTACT_INBOX_EMAIL,
+        subject=f"Ny ägarbytebegäran — {doc['ring_number']}",
+        html=html,
+        reply_to=doc["from_owner_email"],
+    )
+
+    return _clean_transfer(doc)
+
+
+@api.get("/my-ownership-transfers")
+async def my_ownership_transfers(user: dict = Depends(get_current_user)):
+    cursor = db.ownership_transfers.find(
+        {"$or": [
+            {"from_user_id": user["user_id"]},
+            {"to_owner_email": user["email"].lower()},
+        ]},
+        {"_id": 0},
+    ).sort("created_at", -1)
+    return await cursor.to_list(200)
+
+
+
+
 @api.post("/birds/{bird_id}/images")
 async def upload_bird_images(bird_id: str, payload: dict, user: dict = Depends(get_current_user)):
     """Update image_urls for a bird. Owner or admin only. Images are base64 data URIs."""
@@ -1246,6 +1455,152 @@ async def admin_bulk_delete_contact(payload: BulkIdsInput, admin: dict = Depends
     await log_activity(admin["user_id"], admin["email"], "admin.contact.bulk_delete", None,
                        {"ids": payload.ids, "deleted": n})
     return {"deleted": n}
+
+
+# ---- Ownership transfers admin ----
+@api.get("/admin/ownership-transfers")
+async def admin_list_ownership_transfers(
+    _: dict = Depends(require_admin),
+    status: Optional[str] = None,
+):
+    q: dict = {}
+    if status:
+        q["status"] = status
+    cursor = db.ownership_transfers.find(q, {"_id": 0}).sort("created_at", -1)
+    return await cursor.to_list(500)
+
+
+@api.post("/admin/ownership-transfers/{transfer_id}/approve")
+async def admin_approve_transfer(
+    transfer_id: str,
+    body: OwnershipTransferDecision,
+    admin: dict = Depends(require_admin),
+):
+    t = await db.ownership_transfers.find_one({"id": transfer_id})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ägarbytet hittades inte")
+    if t.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Ägarbytet är redan hanterat")
+
+    now_utc = datetime.now(timezone.utc)
+    to_email = (t.get("to_owner_email") or "").lower()
+
+    # Find or create the new owner account
+    to_user = await db.users.find_one({"email": to_email})
+    temp_password: Optional[str] = None
+    if not to_user:
+        temp_password = secrets.token_urlsafe(9)
+        first, _, last = (t.get("to_owner_name") or "").partition(" ")
+        new_user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": new_user_id,
+            "email": to_email,
+            "password_hash": hash_password(temp_password),
+            "first_name": first,
+            "last_name": last,
+            "role": "user",
+            "is_blocked": False,
+            "profile_image_url": None,
+            "auth_provider": "auto",
+            "must_reset_password": True,
+            "created_at": now_utc.isoformat(),
+            "updated_at": now_utc.isoformat(),
+        })
+        to_user = await db.users.find_one({"user_id": new_user_id})
+        await log_activity(admin["user_id"], admin["email"], "user.auto_register", new_user_id, {"source": "ownership_transfer"})
+
+    # Transfer the bird — 14 days to pay membership
+    next_due_membership = (now_utc.date() + timedelta(days=14)).isoformat()
+    await db.registered_birds.update_one(
+        {"id": t["bird_id"]},
+        {"$set": {
+            "user_id": to_user["user_id"],
+            "owner_name": t.get("to_owner_name"),
+            "owner_email": to_email,
+            "phone_number": t.get("to_owner_phone"),
+            "owner_address": t.get("to_owner_address"),
+            "annual_fee_paid_until": next_due_membership,
+        }},
+    )
+    # Sync payment plan next_due to 14 days from now (grace period)
+    await db.payment_plans.update_one(
+        {"bird_id": t["bird_id"]},
+        {"$set": {
+            "user_id": to_user["user_id"],
+            "user_email": to_email,
+            "next_due_date": next_due_membership,
+            "status": "grace_period",
+            "updated_at": now_utc.isoformat(),
+        }},
+    )
+
+    await db.ownership_transfers.update_one(
+        {"id": transfer_id},
+        {"$set": {
+            "status": "approved",
+            "admin_notes": body.reason,
+            "decided_at": now_utc.isoformat(),
+            "decided_by_admin_id": admin["user_id"],
+            "grace_period_until": next_due_membership,
+        }},
+    )
+    await log_activity(admin["user_id"], admin["email"], "admin.transfer.approve", transfer_id, {"bird_id": t["bird_id"]})
+
+    # Email: notify both parties
+    from_html = _build_transfer_approved_html_from(t, next_due_membership)
+    to_html = _build_transfer_approved_html_to(t, next_due_membership, temp_password)
+    await send_platform_email(
+        to=t["from_owner_email"],
+        subject=f"Ägarbytet är godkänt — {t.get('ring_number','')}",
+        html=from_html,
+        reply_to=CONTACT_INBOX_EMAIL,
+    )
+    await send_platform_email(
+        to=to_email,
+        subject=f"Ägarbytet är genomfört — {t.get('ring_number','')}",
+        html=to_html,
+        reply_to=CONTACT_INBOX_EMAIL,
+    )
+
+    doc = await db.ownership_transfers.find_one({"id": transfer_id}, {"_id": 0})
+    return doc
+
+
+@api.post("/admin/ownership-transfers/{transfer_id}/reject")
+async def admin_reject_transfer(
+    transfer_id: str,
+    body: OwnershipTransferDecision,
+    admin: dict = Depends(require_admin),
+):
+    t = await db.ownership_transfers.find_one({"id": transfer_id})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ägarbytet hittades inte")
+    if t.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Ägarbytet är redan hanterat")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.ownership_transfers.update_one(
+        {"id": transfer_id},
+        {"$set": {
+            "status": "rejected",
+            "admin_notes": body.reason,
+            "decided_at": now_iso,
+            "decided_by_admin_id": admin["user_id"],
+        }},
+    )
+    await log_activity(admin["user_id"], admin["email"], "admin.transfer.reject", transfer_id, {"reason": body.reason})
+
+    html = _build_transfer_rejected_html(t, body.reason or "")
+    await send_platform_email(
+        to=t["from_owner_email"],
+        subject=f"Ägarbytet avslogs — {t.get('ring_number','')}",
+        html=html,
+        reply_to=CONTACT_INBOX_EMAIL,
+    )
+    doc = await db.ownership_transfers.find_one({"id": transfer_id}, {"_id": 0})
+    return doc
+
+
 
 
 @api.post("/discount-codes/validate")

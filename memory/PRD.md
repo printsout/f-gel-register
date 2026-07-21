@@ -104,11 +104,12 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 
 ## Backlog (P0/P1/P2)
 ### Recently completed (2026-07-21)
-- ✅ **Resend/Emergent-managed email**: enhetlig hjälpare `send_platform_email()` införd. Reply-To sätts på kontaktnotiser och registreringsbekräftelser. Ny transaktionell mall **"Tack för din registrering"** (HTML, tabellayout, ringnummer + totalpris + länk till "Mina fåglar") skickas automatiskt när Stripe-betalning aktiveras. Verifierat att både reset-, kontakt- och bekräftelseflöden POSTAR mot Emergent-proxyn (202 Accepted).
-- ✅ Discount codes now support two types: **percent (%)** and **fixed kr**. Fixed-kr discounts apply to the full checkout total (registration + membership); percent discounts apply to the total too.
-- ✅ Registration form: e-post visas alltid, nytt obligatoriskt Adress-fält, ytterligare info-placeholder "Skriv gärna fågelnamnet", utökad förklaring under Ringnummer.
-- ✅ **GDPR cookies-banner** (`CookieConsent.jsx`) globalt monterad med tre val + Anpassa-toggels. Länk "Cookie-inställningar" i footer.
-- ✅ **Utökad analys på admin dashboard**: KPI "Konvertering (%)", diagram "Intäkter per månad", lista "Rabattkoder – topp användning".
+- ✅ **Ägarbyte-flöde**: nytt publikt formulär `/agarbyte` där inloggad ägare fyller i både sina egna och nya ägarens uppgifter (namn, e-post, adress, telefon). Ny adminsida `/admin/ownership-transfers` med godkänn/avslå-flöde. Vid godkännande: konto skapas automatiskt för ny ägare om det saknas (tempoärt lösenord skickas per e-post), fågelns ägare uppdateras, medlemsavgiften får 14 dagars betalningsfrist, både gammal och ny ägare får e-postnotis. Admin får notis när begäran skapas. E2E-testat via curl.
+- ✅ **Resend/Emergent-managed email**: enhetlig hjälpare `send_platform_email()`. Reply-To sätts på kontaktnotiser och registreringsbekräftelser. Ny transaktionell mall "Tack för din registrering" skickas efter Stripe-betalning. Tre transaktionsmallar totalt (reset, kontakt, registrering + ägarbyte-mallar).
+- ✅ Discount codes: procent (%) och fast kr som typval. Admin UI + hero-bubbla + live-pris.
+- ✅ Registration form: e-post + adress + placeholder "Skriv gärna fågelnamnet" + utökad ringnummer-text.
+- ✅ **GDPR cookies-banner** globalt monterad med Anpassa-toggels. Länk i footer.
+- ✅ **Utökad analys** på admin dashboard: Konvertering %, Intäkter per månad, Rabattkoder top-usage.
 
 ### P1
 - Hook up `/admin/payment-plans` route in `App.js` + AdminLayout sidebar (page component exists at `/app/frontend/src/pages/admin/PaymentPlans.jsx`).

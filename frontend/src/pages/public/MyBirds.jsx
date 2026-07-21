@@ -438,6 +438,11 @@ export default function MyPosts() {
                                 <BirdIcon size={16} className="mr-2" /> Registrera fågel
                             </Button>
                         </Link>
+                        <Link to="/agarbyte">
+                            <Button variant="outline" data-testid="button-transfer-ownership">
+                                Ägarbyte
+                            </Button>
+                        </Link>
                         <Button
                             onClick={() => {
                                 if (birds.length === 0) {

@@ -34,6 +34,8 @@ import AdminHomepage from "@/pages/admin/Homepage";
 import AdminMenu from "@/pages/admin/Menu";
 import AdminPaymentPlans from "@/pages/admin/PaymentPlans";
 import AdminContactMessages from "@/pages/admin/ContactMessages";
+import OwnershipTransfer from "@/pages/public/OwnershipTransfer";
+import OwnershipTransfersAdmin from "@/pages/admin/OwnershipTransfers";
 import CookieConsent from "@/components/CookieConsent";
 
 function AppRoutes() {
@@ -52,6 +54,7 @@ function AppRoutes() {
             <Route path="/hittade-faglar" element={<FoundBirdsList />} />
             <Route path="/galleri" element={<Gallery />} />
             <Route path="/mina-faglar" element={<MyBirds />} />
+            <Route path="/agarbyte" element={<OwnershipTransfer />} />
             <Route path="/sidor/:slug" element={<ContentPage />} />
             <Route path="/kontakt" element={<Contact />} />
             <Route path="/glomt-losenord" element={<ForgotPassword />} />
@@ -176,6 +179,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <AdminContactMessages />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/ownership-transfers"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <OwnershipTransfersAdmin />
                     </ProtectedRoute>
                 }
             />
