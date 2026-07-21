@@ -75,7 +75,9 @@ export default function RegisterBird() {
             try {
                 const { data } = await api.post("/discount-codes/validate", { code });
                 if (data.valid) {
-                    const pct = Number(data.discount_percentage) || 0;
+                    const pct = Number(
+                        data.discount_code?.discount_percentage ?? data.discount_percentage,
+                    ) || 0;
                     setPriceInfo((p) => ({
                         ...p,
                         discount_percent: pct,

@@ -1,0 +1,36 @@
+{
+  "summary": "Re-tested iteration 17 fix for the live-price validation bug on /registrera-fagel. The RegisterBird.jsx change (line 78-81 now reads `data.discount_code?.discount_percentage ?? data.discount_percentage`) works end-to-end. All 5 discount pricing scenarios pass. Regression on /admin/contact-messages passes. Rate-limit mechanism verified (429 fires) although exact 6th-attempt threshold could not be validated because the IP bucket was already saturated from prior runs (expected per task note).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    {"case": "Baseline no discount (300 + 100 = 400 kr)", "result": "PASS", "observed": "price-registration='300 kr', price-membership='100 kr', price-total='400 kr'"},
+    {"case": "PARROTS15 -> valid banner + −45 kr + total 355 kr", "result": "PASS", "observed": "discount-status-valid='✓ Rabattkod giltig — 15% avdrag', price-discount='−45 kr', price-total='355 kr'"},
+    {"case": "Clear discount -> back to 400 kr, price-discount row hidden", "result": "PASS", "observed": "price-total='400 kr', price-discount count=0, valid banner count=0"},
+    {"case": "INVALID999 -> discount-status-invalid + total stays 400 kr", "result": "PASS", "observed": "invalid banner='Rabattkoden finns inte', price-total='400 kr'"},
+    {"case": "?discount=PARROTS15 URL param auto-fill + total 355 kr", "result": "PASS", "observed": "input value='PARROTS15', price-total='355 kr', valid banner present"},
+    {"case": "Regression: admin login (habib.nazary@hotmail.com) + /admin/contact-messages loads", "result": "PASS", "observed": "72 data-testids rendered, tabs Alla/Nya/Lästa/Besvarade/Arkiverade all clickable"},
+    {"case": "Regression: click message-<uuid> row -> message-detail-body visible", "result": "PASS", "observed": "message-detail-body count=1, visible=true"},
+    {"case": "Regression: rate-limit on /api/auth/login (attempt #6 -> 429)", "result": "PARTIAL — mechanism verified", "observed": "Fresh email: attempt #1 -> 401, attempt #2 -> 429 (bucket already hit; likely IP-keyed and consumed by prior test iterations). Rate-limit IS enforced (429 returned); exact 6th-attempt threshold not verifiable in this environment. This matches task note explicitly."}
+  ],
+  "test_report_links": [
+    "/app/test_reports/iteration_17.json",
+    "/app/backend/tests/test_iter17_contact_admin_and_refactor.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RegisterBird.jsx line 78-81 fix is correctly defensive — supports both response shapes (data.discount_code.discount_percentage and legacy data.discount_percentage). Clean fallback.",
+    "Login route mismatch note: LOGIN path in app is /login (App.js line 44), not /logga-in. Task description referred to /logga-in — worth confirming intended URL for Swedish UX consistency, but this is a minor UX/i18n consideration and not a bug."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only test)", "frontend": "100% (5/5 discount + admin regression)"},
+  "test_credentials": "Admin: habib.nazary@hotmail.com / Jordgubbe234@u — verified working. Discount code PARROTS15 (15%) — verified working.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 17 bug fully resolved. Live discount pricing works: PARROTS15 -> 355 kr, INVALID999 -> error banner, URL ?discount=PARROTS15 auto-fills. Login URL is /login (not /logga-in). Rate-limit is in-memory and IP-keyed, tends to already be saturated by earlier test runs. Admin contact-messages testids: `message-<uuid>` for row click (opens detail), `bulk-select-row-<uuid>` for the checkbox, `messages-status-tabs` for the tab bar, `message-detail-body` for opened message content.",
+  "rca of the issue": "Original iter17 bug: backend POST /api/discount-codes/validate returns `{valid: true, discount_code: {discount_percentage: 15, ...}}` but RegisterBird.jsx read `data.discount_percentage` (undefined). Fix: read `data.discount_code?.discount_percentage ?? data.discount_percentage`. Verified: live UI shows 15% -> -45 kr -> 355 kr total."
+}
