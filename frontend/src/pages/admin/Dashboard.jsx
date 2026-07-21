@@ -17,9 +17,9 @@ import {
     Coins,
     Ticket as TicketIcon,
     ChatCircleDots,
-    Star,
     ShieldWarning,
     ArrowUpRight,
+    Percent,
 } from "@phosphor-icons/react";
 import AdminLayout from "@/components/AdminLayout";
 import api from "@/lib/api";
@@ -132,6 +132,17 @@ export default function Dashboard() {
                             value={Math.round(stats.total_revenue)}
                             icon={Coins}
                             tone="primary"
+                        />
+                        <KPI
+                            label="Konvertering"
+                            value={`${stats.conversion_rate ?? 0}%`}
+                            icon={Percent}
+                            tone="success"
+                            hint={
+                                stats.total_registered_birds
+                                    ? `${stats.paid_birds} av ${stats.total_registered_birds}`
+                                    : null
+                            }
                         />
                         <KPI
                             label="Rabattkoder"
@@ -276,6 +287,100 @@ export default function Dashboard() {
                                         />
                                     </BarChart>
                                 </ResponsiveContainer>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Row 2 — Revenue per month + Discount code usage */}
+                    <div className="grid lg:grid-cols-3 gap-6 mt-6">
+                        <div
+                            className="surface p-6 lg:col-span-2"
+                            data-testid="chart-revenue-month"
+                        >
+                            <div className="mb-6">
+                                <p className="label-caps">Intäkter per månad</p>
+                                <h3 className="font-display text-xl font-bold mt-1">
+                                    Senaste 6 månaderna
+                                </h3>
+                            </div>
+                            <ResponsiveContainer width="100%" height={260}>
+                                <BarChart
+                                    data={stats.revenue_by_month || []}
+                                    margin={{ top: 10, right: 12, left: -12, bottom: 0 }}
+                                >
+                                    <CartesianGrid
+                                        strokeDasharray="2 4"
+                                        vertical={false}
+                                        stroke="hsl(var(--border))"
+                                    />
+                                    <XAxis
+                                        dataKey="month"
+                                        stroke="hsl(var(--muted-foreground))"
+                                        fontSize={11}
+                                        tickFormatter={(v) => v?.slice(5) + "/" + v?.slice(2, 4)}
+                                    />
+                                    <YAxis
+                                        stroke="hsl(var(--muted-foreground))"
+                                        fontSize={11}
+                                        allowDecimals={false}
+                                    />
+                                    <Tooltip
+                                        formatter={(value, name) => [
+                                            name === "total" ? `${Math.round(value)} kr` : value,
+                                            name === "total" ? "Intäkt" : "Antal",
+                                        ]}
+                                        contentStyle={{
+                                            background: "hsl(var(--card))",
+                                            border: "1px solid hsl(var(--border))",
+                                            borderRadius: 8,
+                                            fontSize: 12,
+                                        }}
+                                    />
+                                    <Bar
+                                        dataKey="total"
+                                        fill="hsl(var(--primary))"
+                                        radius={[6, 6, 0, 0]}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div
+                            className="surface p-6"
+                            data-testid="chart-discount-usage"
+                        >
+                            <div className="mb-4">
+                                <p className="label-caps">Rabattkoder</p>
+                                <h3 className="font-display text-xl font-bold mt-1">
+                                    Topp användning
+                                </h3>
+                            </div>
+                            {(stats.discount_usage || []).length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                    Ingen rabattkod har använts än.
+                                </p>
+                            ) : (
+                                <ul className="divide-y divide-border">
+                                    {stats.discount_usage.map((d) => (
+                                        <li
+                                            key={d.code}
+                                            className="py-3 flex items-center justify-between"
+                                            data-testid={`discount-usage-${d.code}`}
+                                        >
+                                            <div>
+                                                <p className="font-mono font-semibold text-sm">
+                                                    {d.code}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {d.used} användningar
+                                                </p>
+                                            </div>
+                                            <span className="text-sm font-semibold text-[hsl(var(--success))]">
+                                                −{Math.round(d.saved)} kr
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
                             )}
                         </div>
                     </div>

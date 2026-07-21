@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { EnvelopeSimple } from "@phosphor-icons/react";
 import api from "@/lib/api";
+import { openCookieSettings } from "@/components/CookieConsent";
 
 export default function PublicFooter() {
     const [pages, setPages] = useState([]);
@@ -66,11 +67,19 @@ export default function PublicFooter() {
                     <p className="text-xs text-muted-foreground">
                         © {new Date().getFullYear()} Fågelregister
                     </p>
-                    <div className="flex gap-4 text-xs text-muted-foreground">
+                    <div className="flex gap-4 text-xs text-muted-foreground items-center">
                         <a href="mailto:info@fagelregister.se">
                             info@fagelregister.se
                         </a>
                         <span>0768 48 80 91</span>
+                        <button
+                            type="button"
+                            onClick={openCookieSettings}
+                            className="hover:text-foreground transition-colors underline-offset-2 hover:underline"
+                            data-testid="footer-cookie-settings"
+                        >
+                            Cookie-inställningar
+                        </button>
                     </div>
                 </div>
             </div>

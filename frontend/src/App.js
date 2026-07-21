@@ -34,6 +34,7 @@ import AdminHomepage from "@/pages/admin/Homepage";
 import AdminMenu from "@/pages/admin/Menu";
 import AdminPaymentPlans from "@/pages/admin/PaymentPlans";
 import AdminContactMessages from "@/pages/admin/ContactMessages";
+import CookieConsent from "@/components/CookieConsent";
 
 function AppRoutes() {
     const location = useLocation();
@@ -188,6 +189,7 @@ export default function App() {
         <BrowserRouter>
             <AuthProvider>
                 <AppRoutes />
+                <CookieConsent />
                 <Toaster
                     position="top-right"
                     richColors

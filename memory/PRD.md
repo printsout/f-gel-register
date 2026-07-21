@@ -105,6 +105,9 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 ## Backlog (P0/P1/P2)
 ### Recently completed (2026-07-21)
 - ✅ Discount codes now support two types: **percent (%)** and **fixed kr**. Fixed-kr discounts apply to the full checkout total (registration + membership); percent discounts apply to the total too. Admin UI lets you choose the type; hero rabatt-bubbla and live price summary reflect the correct type.
+- ✅ Registration form: e-post visas alltid (prefillad från kontot om inloggad), nytt obligatoriskt **Adress**-fält, ytterligare info-placeholder ändrad till "Skriv gärna fågelnamnet", förklarande text under Ringnummer utökad med "-siffra"-tips.
+- ✅ **GDPR cookies-banner** (`CookieConsent.jsx`) med tre val: Acceptera alla / Endast nödvändiga / Anpassa (analys + marknadsföring togglar). Val sparas i localStorage. Länk "Cookie-inställningar" i footer öppnar dialogen igen.
+- ✅ **Utökad analys på admin dashboard**: ny KPI "Konvertering (%)", nytt diagram "Intäkter per månad" (6 månader), ny lista "Rabattkoder – topp användning" med sparad summa i kr. Backend `/api/admin/stats` returnerar `conversion_rate`, `revenue_by_month`, `discount_usage`.
 
 ### P1
 - Hook up `/admin/payment-plans` route in `App.js` + AdminLayout sidebar (page component exists at `/app/frontend/src/pages/admin/PaymentPlans.jsx`).

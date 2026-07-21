@@ -1854,6 +1854,65 @@ async def admin_stats(_: dict = Depends(require_admin)):
     ])
     species_top = [{"species": s["_id"], "count": s["count"]} for s in await species_cursor.to_list(20)]
 
+    # Revenue per month for last 6 calendar months (including current)
+    y_start, m_start = now.year, now.month
+    for _ in range(5):
+        m_start -= 1
+        if m_start < 1:
+            m_start = 12
+            y_start -= 1
+    six_start_iso = f"{y_start:04d}-{m_start:02d}-01"
+    rev_month_cursor = db.registered_birds.aggregate([
+        {"$match": {"payment_status": "completed", "registration_date": {"$gte": six_start_iso}}},
+        {"$group": {
+            "_id": {"$substrBytes": ["$registration_date", 0, 7]},
+            "total": {"$sum": {"$ifNull": ["$final_amount", 300]}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+    ])
+    rev_month_raw = {d["_id"]: d for d in await rev_month_cursor.to_list(24)}
+    revenue_by_month = []
+    y, m = y_start, m_start
+    for _ in range(6):
+        key = f"{y:04d}-{m:02d}"
+        item = rev_month_raw.get(key, {"total": 0, "count": 0})
+        revenue_by_month.append({
+            "month": key,
+            "total": float(item["total"]),
+            "count": int(item["count"]),
+        })
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+
+    # Discount code usage – top 5 with saved amount
+    disc_cursor = db.registered_birds.aggregate([
+        {"$match": {"payment_status": "completed", "discount_code_id": {"$ne": None}}},
+        {"$group": {
+            "_id": "$discount_code_id",
+            "used": {"$sum": 1},
+            "saved": {"$sum": {"$subtract": [400, {"$ifNull": ["$final_amount", 300]}]}},
+        }},
+        {"$sort": {"used": -1}},
+        {"$limit": 5},
+    ])
+    disc_agg = await disc_cursor.to_list(20)
+    discount_usage = []
+    for row in disc_agg:
+        dc = await db.discount_codes.find_one({"id": row["_id"]}, {"_id": 0, "code": 1})
+        if not dc:
+            continue
+        discount_usage.append({
+            "code": dc["code"],
+            "used": int(row["used"]),
+            "saved": max(0.0, float(row["saved"])),
+        })
+
+    # Conversion rate
+    conversion_rate = round((paid_birds / total_birds) * 100, 1) if total_birds else 0.0
+
     return {
         "total_users": total_users,
         "blocked_users": blocked_users,
@@ -1869,8 +1928,11 @@ async def admin_stats(_: dict = Depends(require_admin)):
         "missing_searching": missing_searching,
         "missing_found": missing_found,
         "total_revenue": total_revenue,
+        "conversion_rate": conversion_rate,
         "registrations_series": registrations_series,
         "species_top": species_top,
+        "revenue_by_month": revenue_by_month,
+        "discount_usage": discount_usage,
     }
 
 
