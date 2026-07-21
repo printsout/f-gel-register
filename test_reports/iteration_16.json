@@ -1,0 +1,42 @@
+{
+  "summary": "Full backend security audit against production preview URL. All 21 review-request checkpoints verified via 26 pytest cases (backend/tests/test_security_iter16.py) — 26 passed, 0 failed. PII is stripped from every public endpoint, rate limits fire on the exact off-by-one boundaries specified (login 6th, register 6th, ring-search 21st, contact 4th, bird-register 11th, discount-validate 21st), ownership and admin-only rules are enforced with correct HTTP codes, JWT cookies are HttpOnly+Secure+SameSite=None, blocked users get 403 Kontot är blockerat, Stripe webhook rejects missing/invalid signatures with 400, and regression flows (root, /contact happy path, /registered-birds → Stripe checkout URL) still work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/registered-birds", "issue": "rate_limit runs before Swedish phone validation and before uniqueness check, so invalid submissions still consume the 10/h bucket. This is intentional (defence against submit-spam) but means a legitimate user who typos their phone 10× within the hour will be locked out. Consider bumping window to 15 min or raising limit."},
+      {"endpoint": "/api/discount-codes/validate", "issue": "rate_limit runs before code lookup; 20/min is fine but there is no per-code failure counter — an attacker can enumerate codes at 20/min per IP. Consider tightening to 10/min or adding an exponential backoff after N invalid codes."},
+      {"endpoint": "/api/contact", "issue": "Both in-memory and persistent DB rate limits fire, but the persistent DB check (3/hour by email) survives restart while the in-memory check does not, so behaviour is asymmetric. Legitimate users who submit 3 in a day then wait 1h may still see 429 depending on which layer trips first. Acceptable but worth documenting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_iter16.py",
+    "/app/test_reports/pytest/iter16_security.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py has grown to 2964 lines — well past the 700-line guideline. Splitting into modules (auth.py, admin.py, posts.py, payments.py, security.py) would materially improve maintainability. Not blocking release but should be planned.",
+    "Rate-limiter is process-local (module-level dict _RATE_BUCKETS). If backend runs with >1 worker or is horizontally scaled, limits multiply by worker count. For a real-world release move this to Redis (INCR + EXPIRE) or at minimum document that backend must run single-worker.",
+    "Contact endpoint has TWO rate-limit layers (in-memory + DB count). If one changes the other is not kept in sync — consolidate to a single source of truth.",
+    "CORSMiddleware is registered AFTER app.include_router(api). FastAPI/Starlette allow this ordering but middleware added after routing can behave subtly differently on OPTIONS pre-flights. Move add_middleware BEFORE include_router as a best practice.",
+    "The `allow_credentials=cors_origins != '*'` toggle is correct but silent — if an operator sets CORS_ORIGINS=* (which is the current default when env var is missing), cookie-based auth breaks from the frontend and there is no log warning. Log a warning at startup when credentials are disabled.",
+    "/api/registered-birds calls rate_limit before Pydantic validation — this is defensive but means a user hitting rate-limit gets a Swedish 429 message while a user with a bad phone gets a different Swedish 400. Both fine, but the order should be documented as intentional.",
+    "The auto-created user path in POST /registered-birds (lines 675-720) generates a temp password and stores its hash, but the temp password itself is returned to the caller in the response body only when the response includes it — verify the frontend never persists this to console/localStorage.",
+    "_sanitize_post strips author_email and user_id from public output. Good. But author_name is still exposed and comes directly from `first_name last_name` of the poster. If a user puts their email in the last_name field during registration, it will leak on public posts. Consider validating first_name/last_name against an email-like regex during register."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_iter16.py (new)",
+    "/app/test_reports/pytest/iter16_security.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (26/26 passed, 0 skipped)", "frontend": "n/a (backend-only per request)"},
+  "test_credentials": "Admin habib.nazary@hotmail.com / Jordgubbe234@u (from /app/memory/test_credentials.md). Fresh @example.se users are auto-generated per test.",
+  "seed_data_creation": "Tests created ~4 fresh users (usera-*, userb-*, blocked-*, pwhash-*, sectest-*, rl-reg-*, rl-login-*), 1 pending bird (species=Wellensittich, ring=REG-<uuid>) with pending payment, ~10 birds with invalid phone (rejected at 400) that consumed the register-bird bucket, plus multiple posts (created+deleted by owner). Note: the register-bird rate-limit test leaves the IP 172.16.x.x bucket at 11/10 for 1h; subsequent tests use unique X-Forwarded-For addresses.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Rate-limit tests use unique X-Forwarded-For per test so they are independent. Backend was restarted once during this iteration (in-memory buckets are now populated for the specific IPs listed above but empty for fresh IPs). If you re-run test_security_iter16.py it will pass again because it always generates fresh users, fresh IPs and fresh test data. The contact test also uses fresh randomised IPs to avoid the persistent DB rate-limit layer. Stripe webhook tests use only signature verification — no real Stripe API is called. Admin block/unblock endpoints use PUT (not POST) — confirmed via inspection of /admin/users/{user_id}/block routes at server.py L1795, L1804.",
+  "rca_of_issues": "One test initially failed (test_blocked_user_gets_403) because the block endpoint uses PUT and the test used POST — self-fixed. Two tests initially SKIPPED (bird comments and image-upload ownership) because there were no birds in the DB on gw1 before the rate-limit-test suite on gw0 created some; after backend restart and re-run all 26 passed."
+}

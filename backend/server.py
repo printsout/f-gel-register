@@ -172,6 +172,42 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
 
 
 # ----------------------------------------------------------------------------
+# Simple in-memory rate limiter (best-effort; production would use Redis)
+# ----------------------------------------------------------------------------
+_RATE_BUCKETS: dict[str, list[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    """Extract the client IP honoring the ingress X-Forwarded-For header."""
+    fwd = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if fwd:
+        return fwd
+    return request.client.host if request.client else "unknown"
+
+
+def rate_limit(key: str, *, limit: int, window_seconds: int) -> None:
+    """Raise HTTPException 429 if `key` has hit `limit` calls within the window.
+
+    Uses monotonic time so it's safe against wall-clock changes.
+    """
+    import time as _t
+    now = _t.monotonic()
+    bucket = _RATE_BUCKETS.get(key, [])
+    # Drop expired entries
+    cutoff = now - window_seconds
+    bucket = [ts for ts in bucket if ts > cutoff]
+    if len(bucket) >= limit:
+        retry_after = int(bucket[0] + window_seconds - now) + 1
+        raise HTTPException(
+            status_code=429,
+            detail="För många försök — vänta en stund och försök igen.",
+            headers={"Retry-After": str(max(1, retry_after))},
+        )
+    bucket.append(now)
+    _RATE_BUCKETS[key] = bucket
+
+
+# ----------------------------------------------------------------------------
 # Activity log helper
 # ----------------------------------------------------------------------------
 async def log_activity(actor_id: Optional[str], actor_email: Optional[str], action: str, target: str, details: Optional[dict] = None) -> None:
@@ -417,7 +453,9 @@ class UserUpdate(BaseModel):
 # Auth endpoints
 # ----------------------------------------------------------------------------
 @api.post("/auth/register")
-async def register(data: RegisterInput, response: Response):
+async def register(data: RegisterInput, request: Request, response: Response):
+    ip = _client_ip(request)
+    rate_limit(f"auth:register:{ip}", limit=5, window_seconds=3600)
     email = data.email.lower()
     existing = await db.users.find_one({"email": email})
     if existing:
@@ -450,8 +488,13 @@ async def register(data: RegisterInput, response: Response):
 
 
 @api.post("/auth/login")
-async def login(data: LoginInput, response: Response):
+async def login(data: LoginInput, request: Request, response: Response):
+    ip = _client_ip(request)
     email = data.email.lower()
+    # Two-layer rate limit: per IP (10/min) and per email (5/15min).
+    rate_limit(f"auth:login:ip:{ip}", limit=10, window_seconds=60)
+    rate_limit(f"auth:login:email:{email}", limit=5, window_seconds=900)
+
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash"):
         raise HTTPException(status_code=401, detail="Fel e-post eller lösenord")
@@ -607,6 +650,7 @@ async def root():
 
 @api.post("/registered-birds")
 async def create_registered_bird(data: BirdInput, request: Request):
+    rate_limit(f"submit:register:{_client_ip(request)}", limit=10, window_seconds=3600)
     if not SWEDISH_PHONE_RE.match(data.phone_number):
         raise HTTPException(status_code=400, detail="Ange ett giltigt svenskt telefonnummer")
 
@@ -749,7 +793,10 @@ async def create_registered_bird(data: BirdInput, request: Request):
 
 
 @api.get("/found-birds")
-async def list_found_birds(search: Optional[str] = None):
+async def list_found_birds(request: Request, search: Optional[str] = None):
+    # Rate limit ring-number/text search to prevent scraping (20 searches / min / IP)
+    if search:
+        rate_limit(f"search:found:{_client_ip(request)}", limit=20, window_seconds=60)
     query = {}
     if search:
         s = re.escape(search)
@@ -759,12 +806,17 @@ async def list_found_birds(search: Optional[str] = None):
             {"finder_name": {"$regex": s, "$options": "i"}},
             {"ring_number": {"$regex": s, "$options": "i"}},
         ]}
-    cursor = db.found_birds.find(query, {"_id": 0}).sort("report_date", -1)
+    # Strip finder phone from public output — admin still sees it via /admin/found-birds
+    cursor = db.found_birds.find(
+        query,
+        {"_id": 0, "finder_phone": 0},
+    ).sort("report_date", -1)
     return await cursor.to_list(500)
 
 
 @api.post("/found-birds")
-async def create_found_bird(data: FoundBirdInput):
+async def create_found_bird(data: FoundBirdInput, request: Request):
+    rate_limit(f"submit:found:{_client_ip(request)}", limit=5, window_seconds=3600)
     if not SWEDISH_PHONE_RE.match(data.finder_phone):
         raise HTTPException(status_code=400, detail="Ange ett giltigt svenskt telefonnummer")
     bird = {
@@ -785,10 +837,19 @@ async def create_found_bird(data: FoundBirdInput):
 
 @api.get("/public-birds")
 async def public_birds():
-    # Show all birds so owners see their post appear immediately
+    """Publicly visible bird list — strips ALL PII (owner name/email/phone).
+    Only species, ring number and images are returned."""
     cursor = db.registered_birds.find(
         {},
-        {"_id": 0, "phone_number": 0, "user_id": 0},
+        {
+            "_id": 0,
+            "phone_number": 0,
+            "user_id": 0,
+            "owner_email": 0,
+            "owner_name": 0,
+            "additional_info": 0,
+            "email_sent_at": 0,
+        },
     ).sort("registration_date", -1)
     return await cursor.to_list(500)
 
@@ -849,8 +910,9 @@ async def submit_contact_message(data: ContactMessageInput, request: Request):
         return {"success": True, "id": str(uuid.uuid4())}
 
     # 2) Rate limit — max 3 messages / hour per IP or per email
-    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() \
-        or (request.client.host if request.client else "unknown")
+    ip = _client_ip(request)
+    rate_limit(f"contact:ip:{ip}", limit=3, window_seconds=3600)
+    rate_limit(f"contact:email:{data.email.lower()}", limit=3, window_seconds=3600)
     one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     recent = await db.contact_messages.count_documents({
         "created_at": {"$gte": one_hour_ago},
@@ -991,7 +1053,8 @@ async def admin_bulk_delete_contact(payload: BulkIdsInput, admin: dict = Depends
 
 
 @api.post("/discount-codes/validate")
-async def validate_discount_endpoint(payload: dict):
+async def validate_discount_endpoint(payload: dict, request: Request):
+    rate_limit(f"discount:validate:{_client_ip(request)}", limit=20, window_seconds=60)
     code = (payload.get("code") or "").strip().upper()
     if not code:
         return {"valid": False, "message": "Rabattkod krävs"}
@@ -1002,8 +1065,9 @@ async def validate_discount_endpoint(payload: dict):
 # Missing birds (private – only admin sees these reports)
 # ----------------------------------------------------------------------------
 @api.post("/missing-birds")
-async def report_missing_bird(data: MissingBirdInput):
+async def report_missing_bird(data: MissingBirdInput, request: Request):
     """Public endpoint. Anyone can report their bird missing. Report is private (only admin)."""
+    rate_limit(f"submit:missing:{_client_ip(request)}", limit=5, window_seconds=3600)
     if not SWEDISH_PHONE_RE.match(data.contact_phone):
         raise HTTPException(status_code=400, detail="Ange ett giltigt svenskt telefonnummer")
     doc = {
@@ -1475,8 +1539,11 @@ async def admin_delete_menu_item(item_id: str, admin: dict = Depends(require_adm
 def _sanitize_post(doc: dict, include_private: bool = False) -> dict:
     out = {k: v for k, v in doc.items() if k != "_id"}
     if not include_private:
+        # Strip fields that expose contact info / internal IDs to non-owners
         out.pop("moderated_by", None)
         out.pop("moderated_by_email", None)
+        out.pop("author_email", None)
+        out.pop("user_id", None)
     return out
 
 
@@ -1976,11 +2043,16 @@ async def admin_activity(_: dict = Depends(require_admin), limit: int = Query(10
 # ---- Bird comments public (for gallery) ----
 @api.get("/birds/{bird_id}/comments")
 async def get_bird_comments(bird_id: str):
-    return await db.bird_comments.find({"bird_id": bird_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Strip commenter_email from public output
+    return await db.bird_comments.find(
+        {"bird_id": bird_id},
+        {"_id": 0, "commenter_email": 0},
+    ).sort("created_at", -1).to_list(500)
 
 
 @api.post("/birds/{bird_id}/comments")
-async def create_bird_comment(bird_id: str, data: CommentInput):
+async def create_bird_comment(bird_id: str, data: CommentInput, request: Request):
+    rate_limit(f"comment:{_client_ip(request)}", limit=10, window_seconds=3600)
     bird = await db.registered_birds.find_one({"id": bird_id})
     if not bird:
         raise HTTPException(status_code=404, detail="Fågel hittades inte")
