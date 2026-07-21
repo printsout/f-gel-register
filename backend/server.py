@@ -65,17 +65,15 @@ api = APIRouter(prefix="/api")
 
 
 # ----------------------------------------------------------------------------
-# Helpers – password + JWT
+# Helpers – password + JWT (imports from lib/security.py, kept exported at
+# module scope for backwards compatibility with unit tests)
 # ----------------------------------------------------------------------------
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
+from lib.security import (  # noqa: E402
+    hash_password,
+    verify_password,
+    client_ip as _client_ip,
+    rate_limit,
+)
 
 
 def create_access_token(user_id: str, email: str, role: str) -> str:
@@ -169,42 +167,6 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Endast admin har tillgång")
     return user
-
-
-# ----------------------------------------------------------------------------
-# Simple in-memory rate limiter (best-effort; production would use Redis)
-# ----------------------------------------------------------------------------
-_RATE_BUCKETS: dict[str, list[float]] = {}
-
-
-def _client_ip(request: Request) -> str:
-    """Extract the client IP honoring the ingress X-Forwarded-For header."""
-    fwd = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if fwd:
-        return fwd
-    return request.client.host if request.client else "unknown"
-
-
-def rate_limit(key: str, *, limit: int, window_seconds: int) -> None:
-    """Raise HTTPException 429 if `key` has hit `limit` calls within the window.
-
-    Uses monotonic time so it's safe against wall-clock changes.
-    """
-    import time as _t
-    now = _t.monotonic()
-    bucket = _RATE_BUCKETS.get(key, [])
-    # Drop expired entries
-    cutoff = now - window_seconds
-    bucket = [ts for ts in bucket if ts > cutoff]
-    if len(bucket) >= limit:
-        retry_after = int(bucket[0] + window_seconds - now) + 1
-        raise HTTPException(
-            status_code=429,
-            detail="För många försök — vänta en stund och försök igen.",
-            headers={"Retry-After": str(max(1, retry_after))},
-        )
-    bucket.append(now)
-    _RATE_BUCKETS[key] = bucket
 
 
 # ----------------------------------------------------------------------------

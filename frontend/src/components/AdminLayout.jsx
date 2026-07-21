@@ -19,6 +19,7 @@ import {
     Layout,
     List as ListMenu,
     CurrencyCircleDollar,
+    EnvelopeSimple,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const NAV = [
     { to: "/admin/payment-plans", label: "Betalningsplaner", icon: CurrencyCircleDollar },
     { to: "/admin/content", label: "Innehåll", icon: FileText },
     { to: "/admin/comments", label: "Kommentarer", icon: ChatCircleDots },
+    { to: "/admin/contact-messages", label: "Meddelanden", icon: EnvelopeSimple },
     { to: "/admin/feedback", label: "Feedback", icon: Star },
     { to: "/admin/activity", label: "Aktivitetslogg", icon: ListChecks },
 ];

@@ -49,6 +49,61 @@ export default function RegisterBird() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Live price calculation — validates the discount code with the backend as the
+    // user types. Debounced. Shows total to the user before Stripe redirect.
+    const [priceInfo, setPriceInfo] = useState({
+        registration: 300,
+        membership: user?.membership_active ? 0 : 100,
+        discount_amount: 0,
+        discount_percent: 0,
+        discount_valid: null, // null | true | false
+        discount_error: null,
+    });
+    useEffect(() => {
+        const code = (form.discount_code || "").trim().toUpperCase();
+        if (!code) {
+            setPriceInfo((p) => ({
+                ...p,
+                discount_amount: 0,
+                discount_percent: 0,
+                discount_valid: null,
+                discount_error: null,
+            }));
+            return;
+        }
+        const handle = setTimeout(async () => {
+            try {
+                const { data } = await api.post("/discount-codes/validate", { code });
+                if (data.valid) {
+                    const pct = Number(data.discount_percentage) || 0;
+                    setPriceInfo((p) => ({
+                        ...p,
+                        discount_percent: pct,
+                        discount_amount: Math.round(p.registration * (pct / 100)),
+                        discount_valid: true,
+                        discount_error: null,
+                    }));
+                } else {
+                    setPriceInfo((p) => ({
+                        ...p,
+                        discount_amount: 0,
+                        discount_percent: 0,
+                        discount_valid: false,
+                        discount_error: data.message || "Ogiltig rabattkod",
+                    }));
+                }
+            } catch (_e) {
+                setPriceInfo((p) => ({ ...p, discount_valid: false, discount_error: "Kunde inte verifiera koden" }));
+            }
+        }, 400);
+        return () => clearTimeout(handle);
+    }, [form.discount_code, user]);
+
+    const total = Math.max(
+        0,
+        priceInfo.registration + priceInfo.membership - priceInfo.discount_amount,
+    );
+
     const submit = async (e) => {
         e.preventDefault();
         if (!form.accept) {
@@ -226,7 +281,76 @@ export default function RegisterBird() {
                                 })
                             }
                         />
+                        {priceInfo.discount_valid === true && (
+                            <p
+                                className="text-xs text-[hsl(var(--success))] mt-1"
+                                data-testid="discount-status-valid"
+                            >
+                                ✓ Rabattkod giltig — {priceInfo.discount_percent}% avdrag
+                            </p>
+                        )}
+                        {priceInfo.discount_valid === false && (
+                            <p
+                                className="text-xs text-destructive mt-1"
+                                data-testid="discount-status-invalid"
+                            >
+                                {priceInfo.discount_error}
+                            </p>
+                        )}
                     </div>
+
+                    {/* Live price summary */}
+                    <div
+                        className="rounded-md border border-border bg-muted/40 p-4 space-y-2 text-sm"
+                        data-testid="price-summary"
+                    >
+                        <p className="label-caps text-xs">Beräknad kostnad</p>
+                        <div className="flex justify-between">
+                            <span>Registreringsavgift (1 fågel)</span>
+                            <span data-testid="price-registration">
+                                {priceInfo.registration} kr
+                            </span>
+                        </div>
+                        {priceInfo.discount_amount > 0 && (
+                            <div className="flex justify-between text-[hsl(var(--success))]">
+                                <span>
+                                    Rabatt ({priceInfo.discount_percent}%)
+                                </span>
+                                <span data-testid="price-discount">
+                                    −{priceInfo.discount_amount} kr
+                                </span>
+                            </div>
+                        )}
+                        {priceInfo.membership > 0 && (
+                            <div className="flex justify-between">
+                                <span>Medlemskap första året</span>
+                                <span data-testid="price-membership">
+                                    {priceInfo.membership} kr
+                                </span>
+                            </div>
+                        )}
+                        {priceInfo.membership === 0 && user?.membership_active && (
+                            <div className="flex justify-between text-muted-foreground text-xs">
+                                <span>Medlemskap</span>
+                                <span>Aktivt (ingen avgift)</span>
+                            </div>
+                        )}
+                        <div className="border-t border-border pt-2 flex justify-between font-semibold">
+                            <span>Att betala nu</span>
+                            <span
+                                className="text-lg text-primary"
+                                data-testid="price-total"
+                            >
+                                {total} kr
+                            </span>
+                        </div>
+                        {priceInfo.membership > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                Sedan {priceInfo.membership} kr / år automatiskt via Stripe.
+                            </p>
+                        )}
+                    </div>
+
                     <label className="flex items-start gap-3 pt-2">
                         <Checkbox
                             checked={form.accept}

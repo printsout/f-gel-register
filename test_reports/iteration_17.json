@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 17 – tested (1) new /admin/contact-messages page, (2) live-price summary on /registrera-fagel, (3) security.py refactor. Backend: 10/10 pytest cases pass (login, per-email 429 rate-limit, lib/security exports, admin contact-messages GET/PATCH/bulk-delete, non-admin 401, discount validate). Admin contact-messages UI works fully (16 existing messages, status tabs with counts + tab-new testid, detail dialog with message-detail-body/button-mark-responded/button-archive/button-reply, bulk select UI showing 'vald' sticky bar, refresh + delete row buttons). CRITICAL frontend bug: live-price validation reads wrong response field — with valid PARROTS15 code the total stays at 400 kr and status shows '✓ Rabattkod giltig — 0% avdrag' instead of 15% / 355 kr. Root cause identified: field-name mismatch between backend response and frontend consumer. Also had to restart frontend once because webpack HMR was serving a stale bundle that predated the price-summary block.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Live price on /registrera-fagel with a valid discount code",
+        "issue": "Discount percentage always resolves to 0 %. UI shows '✓ Rabattkod giltig — 0% avdrag', the price-discount row is never rendered, and price-total stays at 400 kr instead of 355 kr. Same bug via ?discount=PARROTS15 URL param — code auto-fills and validation succeeds but the total remains 400 kr.",
+        "affected_selectors": ["[data-testid=discount-status-valid]", "[data-testid=price-discount]", "[data-testid=price-total]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "rca of the issue": "In /app/frontend/src/pages/public/RegisterBird.jsx line 78, the code reads: `const pct = Number(data.discount_percentage) || 0;` — but POST /api/discount-codes/validate returns the shape `{valid: true, discount_code: {code, discount_percentage, ...}}` (verified with curl). `data.discount_percentage` is therefore undefined and `pct` collapses to 0, so `discount_amount = Math.round(300 * 0/100) = 0` and no discount is subtracted from the total. Fix: change to `const pct = Number(data.discount_code?.discount_percentage) || 0;`. Reproduction: (a) open /registrera-fagel, (b) type PARROTS15 in the discount code field, (c) wait ~1.5 s, (d) observe status text says '0% avdrag' and price-total remains '400 kr'. Same repro via URL param ?discount=PARROTS15. Backend endpoint itself is correct — do not change it, or you must also update every other consumer of the same response.",
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_contact_admin_and_refactor.py",
+    "/app/test_reports/pytest/iter17.xml"
+  ],
+  "action_items": [
+    "Fix live-price integration in /app/frontend/src/pages/public/RegisterBird.jsx line 78: replace `Number(data.discount_percentage)` with `Number(data.discount_code?.discount_percentage)`.",
+    "After fixing, re-verify: PARROTS15 → 300 + 100 − 45 = 355 kr; UICODE5665 → 300 + 100 − 30 = 370 kr; INVALID999 → still 400 kr with red error message."
+  ],
+  "critical_code_review_comments": [
+    "RegisterBird.jsx couples to a fragile response shape — consider a shared helper e.g. `getDiscountPercent(resp)` so future callers don't re-introduce the same bug.",
+    "AdminContactMessages useEffect has a missing dependency warning (`load`) — harmless but the ESLint warning is noisy in build logs. Add // eslint-disable-next-line or move `load` into useCallback.",
+    "lib/security.py cleanly extracted — no regressions observed. Consider moving JWT create/decode helpers there next iteration for symmetry.",
+    "Webpack dev server did not hot-reload the new RegisterBird.jsx block until a manual `supervisorctl restart frontend` — worth documenting since future iterations touching this file may hit the same stale-bundle trap."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter17_contact_admin_and_refactor.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "80% (contact-messages page fully functional; live-price broken due to field-name mismatch — 1 of 6 sub-checks failing but blocks all discount flows)"},
+  "test_credentials": "Admin: habib.nazary@hotmail.com / Jordgubbe234@u (verified working). Discount codes: PARROTS15 (15%, active), INVALID999 (does not exist — correctly rejected).",
+  "seed_data_creation": "Two contact_messages inserted during the bulk-delete test but both were cleaned up by the test itself (bulk-delete succeeded). No residual test data.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_iter17_contact_admin_and_refactor.py — reuse them as regression. If webpack seems to serve stale bundles after E1 edits, `sudo supervisorctl restart frontend` (already needed once this iteration). PARROTS15 currently has usage_limit=100, used_count=0 — safe to hit repeatedly. Rate limit on /api/discount-codes/validate is 20/min per IP — space out calls when testing."
+}

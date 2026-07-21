@@ -31,6 +31,7 @@ import AdminContent from "@/pages/admin/Content";
 import AdminHomepage from "@/pages/admin/Homepage";
 import AdminMenu from "@/pages/admin/Menu";
 import AdminPaymentPlans from "@/pages/admin/PaymentPlans";
+import AdminContactMessages from "@/pages/admin/ContactMessages";
 
 function AppRoutes() {
     const location = useLocation();
@@ -162,6 +163,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <AdminPaymentPlans />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/contact-messages"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <AdminContactMessages />
                     </ProtectedRoute>
                 }
             />
