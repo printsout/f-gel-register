@@ -57,6 +57,40 @@ EMERGENT_EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Fågelregister")
 CONTACT_INBOX_EMAIL = os.environ.get("CONTACT_INBOX_EMAIL", "info@fagelregister.se")
 
+
+async def send_platform_email(
+    to: str,
+    subject: str,
+    html: str,
+    reply_to: Optional[str] = None,
+) -> bool:
+    """Send a transactional email via the Emergent-managed Resend proxy.
+    Returns True on 2xx, False otherwise. Never raises."""
+    if not EMERGENT_EMAIL_KEY:
+        return False
+    payload: dict = {
+        "to": [to],
+        "subject": subject,
+        "html": html,
+        "from_name": EMAIL_FROM_NAME,
+    }
+    if reply_to:
+        payload["contact_email"] = reply_to
+    try:
+        async with httpx.AsyncClient(timeout=15) as client_:
+            resp = await client_.post(
+                f"{EMAIL_BASE_URL}/api/v1/email/send",
+                headers={"X-Email-Key": EMERGENT_EMAIL_KEY},
+                json=payload,
+            )
+        if resp.status_code >= 400:
+            logger.warning("Email send failed to=%s status=%s body=%s", to, resp.status_code, resp.text)
+            return False
+        return True
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Email send exception to=%s: %s", to, e)
+        return False
+
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
@@ -567,24 +601,12 @@ async def forgot_password(data: ForgotPasswordInput, request: Request):
         reset_url = f"{origin}/aterstall-losenord/{token}"
 
         # Send email via Emergent-managed Resend
-        if EMERGENT_EMAIL_KEY:
-            try:
-                html = _build_reset_email_html(user.get("first_name") or "", reset_url)
-                async with httpx.AsyncClient(timeout=15) as client:
-                    resp = await client.post(
-                        f"{EMAIL_BASE_URL}/api/v1/email/send",
-                        headers={"X-Email-Key": EMERGENT_EMAIL_KEY},
-                        json={
-                            "to": [email],
-                            "subject": "Återställ ditt lösenord — Fågelregister",
-                            "html": html,
-                            "from_name": EMAIL_FROM_NAME,
-                        },
-                    )
-                if resp.status_code >= 400:
-                    logger.warning("Reset email send failed %s: %s", resp.status_code, resp.text)
-            except Exception as e:  # noqa: BLE001
-                logger.exception("Reset email exception: %s", e)
+        html = _build_reset_email_html(user.get("first_name") or "", reset_url)
+        await send_platform_email(
+            to=email,
+            subject="Återställ ditt lösenord — Fågelregister",
+            html=html,
+        )
 
     # Always return the same response — do not leak whether email exists
     return {
@@ -619,6 +641,61 @@ def _build_reset_email_html(first_name: str, reset_url: str) -> str:
         <p style="font-size:12px;color:#374151;word-break:break-all;font-family:monospace;">{reset_url}</p>
         <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:20px 0 0;border-top:1px solid #e5e7eb;padding-top:16px;">
           Om du inte har begärt att återställa ditt lösenord kan du ignorera det här mailet — ditt konto är fortfarande skyddat.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+"""
+
+
+def _build_registration_confirmation_html(
+    first_name: str,
+    birds: List[dict],
+    amount_kr: float,
+    membership_included: bool,
+    my_birds_url: str,
+) -> str:
+    greeting = f"Hej {first_name}," if first_name else "Hej,"
+    rows = ""
+    for b in birds:
+        rows += f"""
+        <tr>
+          <td style="padding:8px 0;font-size:14px;color:#374151;">{b.get('species','')}</td>
+          <td style="padding:8px 0;font-size:14px;color:#374151;font-family:monospace;text-align:right;">{b.get('ring_number','')}</td>
+        </tr>"""
+    membership_row = ""
+    if membership_included:
+        membership_row = """
+        <tr><td colspan="2" style="padding:12px 0 0;border-top:1px dashed #e5e7eb;font-size:13px;color:#6b7280;">
+          Ett årsmedlemskap ingår och förnyas automatiskt.
+        </td></tr>"""
+    return f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#0D2B1D;padding:20px 24px;">
+        <div style="color:#ffffff;font-size:14px;letter-spacing:2px;text-transform:uppercase;opacity:0.75;">Fågelregister</div>
+        <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px;">Din registrering är klar</div>
+      </td></tr>
+      <tr><td style="padding:24px;">
+        <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">{greeting}</p>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 20px;">
+          Tack för att du registrerat din fågel hos Fågelregister. Din betalning har mottagits
+          och din fågel är nu synlig i registret.
+        </p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;margin:16px 0;">
+          <tr><td style="padding:12px 0;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;">Fågelart</td>
+              <td style="padding:12px 0;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;text-align:right;">Ringnummer</td></tr>
+          {rows}
+          <tr><td colspan="2" style="padding:12px 0;border-top:1px solid #e5e7eb;font-size:15px;font-weight:600;">Totalt betalt: {int(round(amount_kr))} kr</td></tr>
+          {membership_row}
+        </table>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{my_birds_url}" style="display:inline-block;padding:14px 32px;background:#FF5C00;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">Se mina fåglar</a>
+        </div>
+        <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:20px 0 0;border-top:1px solid #e5e7eb;padding-top:16px;">
+          Frågor? Svara på det här mailet så återkommer vi till dig.
         </p>
       </td></tr>
     </table>
@@ -1072,31 +1149,18 @@ async def submit_contact_message(data: ContactMessageInput, request: Request):
     doc.pop("_id", None)
 
     # Fire off notification email to admin inbox (non-blocking, best-effort)
-    if EMERGENT_EMAIL_KEY:
-        try:
-            html = _build_contact_email_html(doc)
-            payload = {
-                "to": [CONTACT_INBOX_EMAIL],
-                "subject": f"Nytt kontaktmeddelande: {data.subject}",
-                "html": html,
-                "from_name": EMAIL_FROM_NAME,
-                "contact_email": data.email,
-            }
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.post(
-                    f"{EMAIL_BASE_URL}/api/v1/email/send",
-                    headers={"X-Email-Key": EMERGENT_EMAIL_KEY},
-                    json=payload,
-                )
-            if resp.status_code >= 400:
-                logger.warning("Contact email send failed %s: %s", resp.status_code, resp.text)
-            else:
-                await db.contact_messages.update_one(
-                    {"id": doc["id"]},
-                    {"$set": {"email_sent_at": datetime.now(timezone.utc).isoformat()}},
-                )
-        except Exception as e:  # noqa: BLE001
-            logger.exception("Contact email exception: %s", e)
+    html = _build_contact_email_html(doc)
+    ok = await send_platform_email(
+        to=CONTACT_INBOX_EMAIL,
+        subject=f"Nytt kontaktmeddelande: {data.subject}",
+        html=html,
+        reply_to=data.email,
+    )
+    if ok:
+        await db.contact_messages.update_one(
+            {"id": doc["id"]},
+            {"$set": {"email_sent_at": datetime.now(timezone.utc).isoformat()}},
+        )
 
     return {"success": True, "id": doc["id"]}
 
@@ -2995,6 +3059,39 @@ async def _activate_payment_for_session(session_id: str, stripe_session=None) ->
                 "stripe_subscription_id": subscription_id,
                 "updated_at": now_utc.isoformat(),
             }},
+        )
+
+    # Send registration confirmation email (best-effort, non-blocking)
+    recipient = txn.get("user_email")
+    if recipient and bird_ids:
+        birds_data = await db.registered_birds.find(
+            {"id": {"$in": bird_ids}}, {"_id": 0, "species": 1, "ring_number": 1}
+        ).to_list(50)
+        user_doc = await db.users.find_one({"user_id": txn.get("user_id")}, {"_id": 0, "first_name": 1}) if txn.get("user_id") else None
+        first_name = (user_doc or {}).get("first_name") or ""
+        origin = None
+        try:
+            s = stripe_session
+            origin = getattr(s, "success_url", None) or ""
+            if origin:
+                origin = origin.split("/betalning/")[0]
+        except Exception:  # noqa: BLE001
+            origin = None
+        my_birds_url = f"{origin or ''}/mina-faglar" if origin else "/mina-faglar"
+        amount_ore = float(txn.get("amount") or 0)
+        amount_kr = amount_ore / 100.0
+        html = _build_registration_confirmation_html(
+            first_name=first_name,
+            birds=birds_data,
+            amount_kr=amount_kr,
+            membership_included=bool(txn.get("include_membership")),
+            my_birds_url=my_birds_url,
+        )
+        await send_platform_email(
+            to=recipient,
+            subject="Tack för din registrering — Fågelregister",
+            html=html,
+            reply_to=CONTACT_INBOX_EMAIL,
         )
 
 
