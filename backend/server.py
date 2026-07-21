@@ -229,6 +229,7 @@ class BirdInput(BaseModel):
     owner_name: str = Field(min_length=1)
     phone_number: str
     owner_email: Optional[EmailStr] = None
+    owner_address: Optional[str] = Field(default=None, max_length=250)
     additional_info: Optional[str] = None
     image_urls: Optional[List[str]] = None
     discount_code: Optional[str] = None
@@ -240,6 +241,8 @@ class BirdUpdate(BaseModel):
     ring_number: Optional[str] = None
     owner_name: Optional[str] = None
     phone_number: Optional[str] = None
+    owner_email: Optional[EmailStr] = None
+    owner_address: Optional[str] = Field(default=None, max_length=250)
     additional_info: Optional[str] = None
     payment_status: Optional[Literal["pending", "processing", "completed", "cancelled"]] = None
 
@@ -851,6 +854,8 @@ async def create_registered_bird(data: BirdInput, request: Request):
         "ring_number": ring,
         "owner_name": data.owner_name,
         "phone_number": data.phone_number,
+        "owner_email": (data.owner_email or current_user_email or "").lower() or None,
+        "owner_address": data.owner_address,
         "additional_info": data.additional_info,
         "image_urls": data.image_urls or [],
         "registration_date": datetime.now(timezone.utc).date().isoformat(),

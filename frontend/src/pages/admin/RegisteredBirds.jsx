@@ -367,6 +367,33 @@ export default function RegisteredBirds() {
                                 />
                             </div>
                             <div>
+                                <Label>E-post</Label>
+                                <Input
+                                    type="email"
+                                    value={editing.owner_email || ""}
+                                    onChange={(e) =>
+                                        setEditing({
+                                            ...editing,
+                                            owner_email: e.target.value,
+                                        })
+                                    }
+                                    data-testid="edit-input-owner-email"
+                                />
+                            </div>
+                            <div>
+                                <Label>Adress</Label>
+                                <Input
+                                    value={editing.owner_address || ""}
+                                    onChange={(e) =>
+                                        setEditing({
+                                            ...editing,
+                                            owner_address: e.target.value,
+                                        })
+                                    }
+                                    data-testid="edit-input-owner-address"
+                                />
+                            </div>
+                            <div>
                                 <Label>Betalstatus</Label>
                                 <Select
                                     value={editing.payment_status}

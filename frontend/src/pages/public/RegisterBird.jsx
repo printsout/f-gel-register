@@ -33,6 +33,7 @@ export default function RegisterBird() {
         ring_number: "",
         owner_name: "",
         owner_email: "",
+        owner_address: "",
         phone_number: "",
         additional_info: "",
         discount_code: "",
@@ -48,6 +49,13 @@ export default function RegisterBird() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Prefill owner_email from logged-in user
+    useEffect(() => {
+        if (user?.email) {
+            setForm((f) => (f.owner_email ? f : { ...f, owner_email: user.email }));
+        }
+    }, [user]);
 
     // Live price calculation — validates the discount code with the backend as the
     // user types. Debounced. Shows total to the user before Stripe redirect.
@@ -134,6 +142,7 @@ export default function RegisterBird() {
         try {
             const { accept, ...payload } = form;
             if (!payload.owner_email) delete payload.owner_email;
+            if (!payload.owner_address) delete payload.owner_address;
             payload.origin_url = window.location.origin;
             const { data } = await api.post("/registered-birds", payload);
             // Persist temp credentials so the success page can show them after redirect
@@ -272,12 +281,42 @@ export default function RegisterBird() {
                             </p>
                         </div>
                     )}
+                    {user && (
+                        <div>
+                            <Label htmlFor="email">E-post *</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                required
+                                data-testid="input-owner-email"
+                                placeholder="din@epost.se"
+                                value={form.owner_email}
+                                onChange={(e) =>
+                                    setForm({ ...form, owner_email: e.target.value })
+                                }
+                            />
+                        </div>
+                    )}
+                    <div>
+                        <Label htmlFor="address">Adress *</Label>
+                        <Input
+                            id="address"
+                            required
+                            data-testid="input-owner-address"
+                            placeholder="Gata 1, 123 45 Ort"
+                            value={form.owner_address}
+                            onChange={(e) =>
+                                setForm({ ...form, owner_address: e.target.value })
+                            }
+                        />
+                    </div>
                     <div>
                         <Label htmlFor="info">Ytterligare info</Label>
                         <Textarea
                             id="info"
                             rows={3}
                             data-testid="input-additional-info"
+                            placeholder="Skriv gärna fågelnamnet"
                             value={form.additional_info}
                             onChange={(e) =>
                                 setForm({
