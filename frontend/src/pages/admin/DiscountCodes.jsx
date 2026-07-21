@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     Table,
     TableBody,
     TableCell,
@@ -40,7 +47,9 @@ import {
 
 const EMPTY = {
     code: "",
+    discount_type: "percent",
     discount_percentage: 15,
+    discount_amount: 50,
     expiry_date: "",
     usage_limit: "",
     is_active: true,
@@ -76,9 +85,12 @@ export default function DiscountCodes() {
     };
 
     const openEdit = (c) => {
+        const dtype = c.discount_type || (c.discount_amount ? "amount" : "percent");
         setForm({
             code: c.code,
-            discount_percentage: c.discount_percentage,
+            discount_type: dtype,
+            discount_percentage: c.discount_percentage ?? 15,
+            discount_amount: c.discount_amount ?? 50,
             expiry_date: c.expiry_date || "",
             usage_limit: c.usage_limit || "",
             is_active: !!c.is_active,
@@ -89,8 +101,11 @@ export default function DiscountCodes() {
 
     const submit = async () => {
         try {
+            const isPct = form.discount_type === "percent";
             const payload = {
-                discount_percentage: parseInt(form.discount_percentage, 10),
+                discount_type: form.discount_type,
+                discount_percentage: isPct ? parseInt(form.discount_percentage, 10) : null,
+                discount_amount: !isPct ? parseInt(form.discount_amount, 10) : null,
                 expiry_date: form.expiry_date || null,
                 usage_limit: form.usage_limit ? parseInt(form.usage_limit, 10) : null,
                 is_active: form.is_active,
@@ -217,7 +232,11 @@ export default function DiscountCodes() {
                                         {c.code}
                                     </TableCell>
                                     <TableCell>
-                                        <Badge>{c.discount_percentage}%</Badge>
+                                        <Badge>
+                                            {(c.discount_type || (c.discount_amount ? "amount" : "percent")) === "amount"
+                                                ? `${c.discount_amount} kr`
+                                                : `${c.discount_percentage}%`}
+                                        </Badge>
                                     </TableCell>
                                     <TableCell className="text-sm">
                                         {c.expiry_date || "—"}
@@ -265,7 +284,8 @@ export default function DiscountCodes() {
                             {dialog === "new" ? "Ny rabattkod" : "Redigera kod"}
                         </DialogTitle>
                         <DialogDescription>
-                            Rabattkoder ger procentuell rabatt på registreringsavgiften (300 kr).
+                            Rabattkoder ger antingen procentuell rabatt eller ett fast belopp i
+                            kronor på registreringsavgiften.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -283,35 +303,73 @@ export default function DiscountCodes() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <Label>Rabatt (%)</Label>
-                                <Input
-                                    type="number"
-                                    min={1}
-                                    max={100}
-                                    value={form.discount_percentage}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            discount_percentage: e.target.value,
-                                        })
+                                <Label>Rabatt-typ</Label>
+                                <Select
+                                    value={form.discount_type}
+                                    onValueChange={(v) =>
+                                        setForm({ ...form, discount_type: v })
                                     }
-                                    data-testid="input-discount-percentage"
-                                />
+                                >
+                                    <SelectTrigger
+                                        className="mt-1"
+                                        data-testid="select-discount-type"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="percent">Procent (%)</SelectItem>
+                                        <SelectItem value="amount">Kronor (kr)</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
-                            <div>
-                                <Label>Utgår (valfritt)</Label>
-                                <Input
-                                    type="date"
-                                    value={form.expiry_date || ""}
-                                    onChange={(e) =>
-                                        setForm({
-                                            ...form,
-                                            expiry_date: e.target.value,
-                                        })
-                                    }
-                                    data-testid="input-discount-expiry"
-                                />
-                            </div>
+                            {form.discount_type === "percent" ? (
+                                <div>
+                                    <Label>Rabatt (%)</Label>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={100}
+                                        value={form.discount_percentage}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                discount_percentage: e.target.value,
+                                            })
+                                        }
+                                        data-testid="input-discount-percentage"
+                                    />
+                                </div>
+                            ) : (
+                                <div>
+                                    <Label>Rabatt (kr)</Label>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={form.discount_amount}
+                                        onChange={(e) =>
+                                            setForm({
+                                                ...form,
+                                                discount_amount: e.target.value,
+                                            })
+                                        }
+                                        data-testid="input-discount-amount"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <Label>Utgår (valfritt)</Label>
+                            <Input
+                                type="date"
+                                value={form.expiry_date || ""}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        expiry_date: e.target.value,
+                                    })
+                                }
+                                data-testid="input-discount-expiry"
+                            />
                         </div>
                         <div>
                             <Label>Användningsgräns (valfritt)</Label>

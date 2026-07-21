@@ -56,6 +56,7 @@ export default function RegisterBird() {
         membership: user?.membership_active ? 0 : 100,
         discount_amount: 0,
         discount_percent: 0,
+        discount_type: null, // "percent" | "amount" | null
         discount_valid: null, // null | true | false
         discount_error: null,
     });
@@ -66,6 +67,7 @@ export default function RegisterBird() {
                 ...p,
                 discount_amount: 0,
                 discount_percent: 0,
+                discount_type: null,
                 discount_valid: null,
                 discount_error: null,
             }));
@@ -75,21 +77,37 @@ export default function RegisterBird() {
             try {
                 const { data } = await api.post("/discount-codes/validate", { code });
                 if (data.valid) {
-                    const pct = Number(
-                        data.discount_code?.discount_percentage ?? data.discount_percentage,
-                    ) || 0;
-                    setPriceInfo((p) => ({
-                        ...p,
-                        discount_percent: pct,
-                        discount_amount: Math.round(p.registration * (pct / 100)),
-                        discount_valid: true,
-                        discount_error: null,
-                    }));
+                    const dc = data.discount_code || {};
+                    const dtype = dc.discount_type || (dc.discount_amount ? "amount" : "percent");
+                    setPriceInfo((p) => {
+                        const base = p.registration + p.membership;
+                        if (dtype === "amount") {
+                            const amt = Number(dc.discount_amount) || 0;
+                            return {
+                                ...p,
+                                discount_type: "amount",
+                                discount_percent: 0,
+                                discount_amount: Math.min(amt, base),
+                                discount_valid: true,
+                                discount_error: null,
+                            };
+                        }
+                        const pct = Number(dc.discount_percentage) || 0;
+                        return {
+                            ...p,
+                            discount_type: "percent",
+                            discount_percent: pct,
+                            discount_amount: Math.round(base * (pct / 100)),
+                            discount_valid: true,
+                            discount_error: null,
+                        };
+                    });
                 } else {
                     setPriceInfo((p) => ({
                         ...p,
                         discount_amount: 0,
                         discount_percent: 0,
+                        discount_type: null,
                         discount_valid: false,
                         discount_error: data.message || "Ogiltig rabattkod",
                     }));
@@ -288,7 +306,10 @@ export default function RegisterBird() {
                                 className="text-xs text-[hsl(var(--success))] mt-1"
                                 data-testid="discount-status-valid"
                             >
-                                ✓ Rabattkod giltig — {priceInfo.discount_percent}% avdrag
+                                ✓ Rabattkod giltig —{" "}
+                                {priceInfo.discount_type === "amount"
+                                    ? `${priceInfo.discount_amount} kr avdrag`
+                                    : `${priceInfo.discount_percent}% avdrag`}
                             </p>
                         )}
                         {priceInfo.discount_valid === false && (
@@ -316,7 +337,10 @@ export default function RegisterBird() {
                         {priceInfo.discount_amount > 0 && (
                             <div className="flex justify-between text-[hsl(var(--success))]">
                                 <span>
-                                    Rabatt ({priceInfo.discount_percent}%)
+                                    Rabatt
+                                    {priceInfo.discount_type === "amount"
+                                        ? ""
+                                        : ` (${priceInfo.discount_percent}%)`}
                                 </span>
                                 <span data-testid="price-discount">
                                     −{priceInfo.discount_amount} kr

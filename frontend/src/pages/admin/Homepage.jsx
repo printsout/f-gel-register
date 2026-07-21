@@ -217,13 +217,20 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                 }
                 const dc = (window.__discountCodes || []).find((x) => x.id === id);
                 if (!dc) return;
+                const dtype = dc.discount_type || (dc.discount_amount ? "amount" : "percent");
                 patchDiscount({
                     code_id: dc.id,
                     code: dc.code,
-                    type: "percent",
-                    value: dc.discount_percentage,
+                    type: dtype,
+                    value: dtype === "amount" ? dc.discount_amount : dc.discount_percentage,
                     subtitle: `Kod: ${dc.code}`,
                 });
+            };
+            const formatCodeLabel = (d) => {
+                const dtype = d.discount_type || (d.discount_amount ? "amount" : "percent");
+                return dtype === "amount"
+                    ? `${d.discount_amount} kr`
+                    : `${d.discount_percentage}%`;
             };
             return (
                 <div className="space-y-4">
@@ -291,7 +298,7 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                                                         key={d.id}
                                                         value={d.id}
                                                     >
-                                                        {d.code} — {d.discount_percentage}%{" "}
+                                                        {d.code} — {formatCodeLabel(d)}{" "}
                                                         {d.usage_limit
                                                             ? `(${d.used_count}/${d.usage_limit})`
                                                             : ""}
@@ -302,7 +309,7 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                                     {linkedCode && (
                                         <p className="text-xs text-primary mt-1.5">
                                             ✓ Kopplad: <strong>{linkedCode.code}</strong> ·{" "}
-                                            {linkedCode.discount_percentage}% · klick på bubblan applicerar koden automatiskt vid registrering
+                                            {formatCodeLabel(linkedCode)} · klick på bubblan applicerar koden automatiskt vid registrering
                                         </p>
                                     )}
                                 </div>

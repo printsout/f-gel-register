@@ -103,23 +103,27 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ E2E verified: created 3 test users → header select-all → bulk delete 2 → toast "2 användare borttagna" + row count drops from 4 → 2.
 
 ## Backlog (P0/P1/P2)
+### Recently completed (2026-07-21)
+- ✅ Discount codes now support two types: **percent (%)** and **fixed kr**. Fixed-kr discounts apply to the full checkout total (registration + membership); percent discounts apply to the total too. Admin UI lets you choose the type; hero rabatt-bubbla and live price summary reflect the correct type.
+
 ### P1
 - Hook up `/admin/payment-plans` route in `App.js` + AdminLayout sidebar (page component exists at `/app/frontend/src/pages/admin/PaymentPlans.jsx`).
 - Server-side pagination for `/admin/registered-birds` if dataset grows > 1000.
 - **Image uploads** for registered birds (currently `image_urls[]` field exists but no upload UI/storage).
 - Public bird gallery `/gallery` (endpoint exists, no UI yet).
+- Resend-integration: verifierad produktionsdomän/From/Reply-To + fler e-postmallar.
+- Stripe Customer Portal för uppsägning/hantering av prenumeration.
 
 ### P2
 - Super-admin / moderator roles beyond current admin+user split.
 - Email notifications (Resend/SendGrid) on found-bird match by ring number.
-- Password reset flow.
 - Bird detail public page with comments + comment form.
 - Increment `discount_codes.used_count` on successful payment.
-- Handle Stripe subscription renewal events (`invoice.payment_succeeded`) to auto-extend `payment_plan.next_due_date`.
-- Refactor `server.py` into `routers/` (currently ~1300 lines).
+- Apply own discount codes (fixed kr / percent) directly in Stripe Checkout via `discounts=[{coupon}]` (today Stripe uses `allow_promotion_codes` for its own promo codes).
+- Refactor `server.py` into `routers/` (currently ~3100 lines).
 - Migrate `@app.on_event` to lifespan context manager.
 
 ## Test credentials (see `/app/memory/test_credentials.md`)
-- admin@papegojregistret.se / Admin123! (admin)
+- habib.nazary@hotmail.com / Jordgubbe234@u (admin)
 - test@papegojregistret.se / Test123! (user, with 5 sample birds)
-- Seeded discount code: `PARROTS15` (15% off)
+- Seeded discount code: `PARROTS15` (15% off, type=percent)

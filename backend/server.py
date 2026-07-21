@@ -279,14 +279,18 @@ class CommentInput(BaseModel):
 
 class DiscountCodeInput(BaseModel):
     code: str = Field(min_length=1)
-    discount_percentage: int = Field(ge=1, le=100)
+    discount_type: str = Field(default="percent", pattern="^(percent|amount)$")
+    discount_percentage: Optional[int] = Field(default=None, ge=1, le=100)
+    discount_amount: Optional[int] = Field(default=None, ge=1)  # kr
     expiry_date: Optional[str] = None
     usage_limit: Optional[int] = None
     is_active: bool = True
 
 
 class DiscountCodeUpdate(BaseModel):
+    discount_type: Optional[str] = Field(default=None, pattern="^(percent|amount)$")
     discount_percentage: Optional[int] = Field(default=None, ge=1, le=100)
+    discount_amount: Optional[int] = Field(default=None, ge=1)
     expiry_date: Optional[str] = None
     usage_limit: Optional[int] = None
     is_active: Optional[bool] = None
@@ -830,7 +834,14 @@ async def create_registered_bird(data: BirdInput, request: Request):
             raise HTTPException(status_code=400, detail=validation["message"])
         dc = validation["discount_code"]
         original = 300.0
-        final_amount = round(original - (original * dc["discount_percentage"] / 100), 2)
+        d_type = dc.get("discount_type") or ("percent" if dc.get("discount_percentage") else "amount")
+        if d_type == "amount":
+            # Fixed kr discount – applies to total (registration + membership when charged)
+            base = 300.0 + 100.0  # reg + membership base
+            final_amount = round(max(0.0, base - float(dc.get("discount_amount") or 0)), 2)
+        else:
+            pct = int(dc.get("discount_percentage") or 0)
+            final_amount = round(original - (original * pct / 100), 2)
         discount_code_id = dc["id"]
 
     bird = {
@@ -2067,10 +2078,16 @@ async def admin_create_discount_code(data: DiscountCodeInput, admin: dict = Depe
     existing = await db.discount_codes.find_one({"code": code})
     if existing:
         raise HTTPException(status_code=400, detail="Rabattkoden finns redan")
+    if data.discount_type == "percent" and not data.discount_percentage:
+        raise HTTPException(status_code=400, detail="Ange rabatt i procent (1–100)")
+    if data.discount_type == "amount" and not data.discount_amount:
+        raise HTTPException(status_code=400, detail="Ange rabatt i kronor")
     doc = {
         "id": str(uuid.uuid4()),
         "code": code,
-        "discount_percentage": data.discount_percentage,
+        "discount_type": data.discount_type,
+        "discount_percentage": data.discount_percentage if data.discount_type == "percent" else None,
+        "discount_amount": data.discount_amount if data.discount_type == "amount" else None,
         "expiry_date": data.expiry_date,
         "usage_limit": data.usage_limit,
         "used_count": 0,
@@ -2088,6 +2105,12 @@ async def admin_update_discount_code(code_id: str, updates: DiscountCodeUpdate, 
     payload = {k: v for k, v in updates.model_dump(exclude_none=True).items()}
     if not payload:
         raise HTTPException(status_code=400, detail="Inget att uppdatera")
+    # Enforce mutual exclusivity between percent/amount when type changes
+    new_type = payload.get("discount_type")
+    if new_type == "percent":
+        payload["discount_amount"] = None
+    elif new_type == "amount":
+        payload["discount_percentage"] = None
     result = await db.discount_codes.update_one({"id": code_id}, {"$set": payload})
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Rabattkod hittades inte")
@@ -2335,13 +2358,21 @@ async def startup():
         await db.discount_codes.insert_one({
             "id": str(uuid.uuid4()),
             "code": "PARROTS15",
+            "discount_type": "percent",
             "discount_percentage": 15,
+            "discount_amount": None,
             "expiry_date": None,
             "usage_limit": 100,
             "used_count": 0,
             "is_active": True,
             "created_at": now,
         })
+
+    # Backfill discount_type for legacy documents (no-op on fresh DB)
+    await db.discount_codes.update_many(
+        {"discount_type": {"$exists": False}, "discount_percentage": {"$ne": None}},
+        {"$set": {"discount_type": "percent", "discount_amount": None}},
+    )
 
     # Seed one sample found-bird report
     if await db.found_birds.count_documents({}) == 0:
