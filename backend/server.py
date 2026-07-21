@@ -213,6 +213,15 @@ class GoogleSessionInput(BaseModel):
     session_id: str
 
 
+class ForgotPasswordInput(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordInput(BaseModel):
+    token: str = Field(min_length=32, max_length=128)
+    new_password: str = Field(min_length=6, max_length=128)
+
+
 class BirdInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     species: str = Field(min_length=1)
@@ -512,6 +521,151 @@ async def refresh(request: Request, response: Response):
         max_age=60 * 60 * 2, path="/",
     )
     return {"success": True}
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordInput, request: Request):
+    """Generate a one-time reset token and email a reset link.
+
+    Always returns success=true (even if the email doesn't exist) so attackers
+    cannot enumerate valid accounts. Rate-limited per IP + per email.
+    """
+    ip = _client_ip(request)
+    email = data.email.lower()
+    rate_limit(f"auth:forgot:ip:{ip}", limit=5, window_seconds=3600)
+    rate_limit(f"auth:forgot:email:{email}", limit=3, window_seconds=3600)
+
+    user = await db.users.find_one({"email": email})
+    if user:
+        import secrets as _secrets
+        token = _secrets.token_urlsafe(48)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=1)
+        await db.password_reset_tokens.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["user_id"],
+            "user_email": email,
+            "token": token,
+            "used": False,
+            "created_at": now.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "expires_at_dt": expires_at,  # for TTL index
+            "ip": ip,
+        })
+
+        # Determine site origin for the reset link
+        origin = str(request.headers.get("origin") or "").rstrip("/")
+        if not origin:
+            origin = str(request.base_url).rstrip("/")
+        reset_url = f"{origin}/aterstall-losenord/{token}"
+
+        # Send email via Emergent-managed Resend
+        if EMERGENT_EMAIL_KEY:
+            try:
+                html = _build_reset_email_html(user.get("first_name") or "", reset_url)
+                async with httpx.AsyncClient(timeout=15) as client:
+                    resp = await client.post(
+                        f"{EMAIL_BASE_URL}/api/v1/email/send",
+                        headers={"X-Email-Key": EMERGENT_EMAIL_KEY},
+                        json={
+                            "to": [email],
+                            "subject": "Återställ ditt lösenord — Fågelregister",
+                            "html": html,
+                            "from_name": EMAIL_FROM_NAME,
+                        },
+                    )
+                if resp.status_code >= 400:
+                    logger.warning("Reset email send failed %s: %s", resp.status_code, resp.text)
+            except Exception as e:  # noqa: BLE001
+                logger.exception("Reset email exception: %s", e)
+
+    # Always return the same response — do not leak whether email exists
+    return {
+        "success": True,
+        "message": "Om e-postadressen finns registrerad har en återställningslänk skickats.",
+    }
+
+
+def _build_reset_email_html(first_name: str, reset_url: str) -> str:
+    greeting = f"Hej {first_name}," if first_name else "Hej,"
+    return f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <tr><td style="background:#0D2B1D;padding:20px 24px;">
+        <div style="color:#ffffff;font-size:14px;letter-spacing:2px;text-transform:uppercase;opacity:0.75;">Fågelregister</div>
+        <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:4px;">Återställ ditt lösenord</div>
+      </td></tr>
+      <tr><td style="padding:24px;">
+        <p style="font-size:15px;line-height:1.6;margin:0 0 16px;">{greeting}</p>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 20px;">
+          Vi fick en begäran om att återställa lösenordet till ditt konto.
+          Klicka på knappen nedan för att välja ett nytt lösenord.
+          Länken är giltig i <strong>60 minuter</strong>.
+        </p>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{reset_url}" style="display:inline-block;padding:14px 32px;background:#FF5C00;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">Återställ lösenord</a>
+        </div>
+        <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:0 0 8px;">
+          Fungerar inte knappen? Kopiera in denna länk i din webbläsare:
+        </p>
+        <p style="font-size:12px;color:#374151;word-break:break-all;font-family:monospace;">{reset_url}</p>
+        <p style="font-size:13px;color:#6b7280;line-height:1.6;margin:20px 0 0;border-top:1px solid #e5e7eb;padding-top:16px;">
+          Om du inte har begärt att återställa ditt lösenord kan du ignorera det här mailet — ditt konto är fortfarande skyddat.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+"""
+
+
+@api.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordInput, request: Request):
+    """Verify the reset token and set a new password.
+
+    Token must exist, be unused, and not expired. On success the token is
+    consumed (used=true) and any active login_attempts lockout is cleared.
+    """
+    ip = _client_ip(request)
+    rate_limit(f"auth:reset:{ip}", limit=10, window_seconds=3600)
+
+    doc = await db.password_reset_tokens.find_one({"token": data.token})
+    if not doc or doc.get("used"):
+        raise HTTPException(status_code=400, detail="Ogiltig eller redan använd återställningslänk")
+
+    # Parse expiry (may be datetime or ISO string depending on driver version).
+    # Motor returns Mongo BSON datetimes as *tz-naive* (UTC), so we must
+    # normalize to tz-aware before comparing.
+    exp = doc.get("expires_at_dt") or doc.get("expires_at")
+    if isinstance(exp, str):
+        exp = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+    if isinstance(exp, datetime) and exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if not exp or exp < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Länken har gått ut — begär en ny återställning")
+
+    user = await db.users.find_one({"user_id": doc["user_id"]})
+    if not user:
+        raise HTTPException(status_code=400, detail="Kontot finns inte längre")
+
+    # Update password + mark token used atomically (best effort)
+    new_hash = hash_password(data.new_password)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": new_hash, "updated_at": now}},
+    )
+    await db.password_reset_tokens.update_one(
+        {"id": doc["id"]},
+        {"$set": {"used": True, "used_at": now, "used_ip": ip}},
+    )
+    # Invalidate any other outstanding reset tokens for this user
+    await db.password_reset_tokens.update_many(
+        {"user_id": user["user_id"], "used": False, "id": {"$ne": doc["id"]}},
+        {"$set": {"used": True, "used_at": now, "invalidated_reason": "superseded"}},
+    )
+    return {"success": True, "message": "Lösenordet är uppdaterat. Du kan nu logga in."}
 
 
 @api.post("/auth/google/session")

@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 19 password-reset feature tested end-to-end (backend + frontend). Found and fixed one CRITICAL backend bug (offset-naive vs offset-aware datetime comparison at server.py:641 was making /api/auth/reset-password return HTTP 500 for every valid token). After the fix, all 8 backend tests pass and full UI flow works. Admin password restored to Jordgubbe234@u — test credentials file remains accurate.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    {"case": "POST /auth/forgot-password with admin email → 200 + password_reset_tokens doc with used=false, expiry ~60min", "result": "PASS"},
+    {"case": "POST /auth/forgot-password with unknown email → 200 same message, NO doc inserted (no user enumeration)", "result": "PASS"},
+    {"case": "Rate limit per IP: 5x 200 then 6th → 429", "result": "PASS"},
+    {"case": "Rate limit per email: 3x 200 then 4th → 429", "result": "PASS"},
+    {"case": "POST /auth/reset-password with invalid token → 400 'Ogiltig eller redan använd återställningslänk'", "result": "PASS"},
+    {"case": "POST /auth/reset-password with expired token → 400 'Länken har gått ut'", "result": "PASS (after tz-aware fix)"},
+    {"case": "POST /auth/reset-password with valid token → 200; password_hash changed, token used=true, login with new pw works", "result": "PASS (after tz-aware fix)"},
+    {"case": "Re-using same token → 400", "result": "PASS"},
+    {"case": "Regression: /auth/login + /auth/refresh + /auth/me with admin creds", "result": "PASS"},
+    {"case": "Frontend: /login shows 'Glömt lösenord?' link ONLY in login mode (hidden in register)", "result": "PASS — element removed from DOM when mode=register"},
+    {"case": "Frontend: click link navigates to /glomt-losenord", "result": "PASS"},
+    {"case": "Frontend: /glomt-losenord submit → forgot-sent panel 'Kolla din inkorg' with submitted email masked/shown", "result": "PASS"},
+    {"case": "Frontend: /aterstall-losenord/:token — non-matching passwords shows 'Lösenorden matchar inte' inline warning", "result": "PASS"},
+    {"case": "Frontend: reset submit → 'reset-done' panel then auto-navigate to /login within ~2.5s", "result": "PASS"},
+    {"case": "Final restore: admin habib.nazary@hotmail.com login with Jordgubbe234@u → 200", "result": "PASS"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_password_reset.py",
+    "/app/test_reports/pytest/iter19_password_reset.xml"
+  ],
+  "action_items": [
+    "None — feature works. The tz-aware datetime fix at server.py:640-643 was minor and applied by the testing agent (see updated_files)."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL BUG FIXED by testing agent: server.py:641 compared `doc.get('expires_at_dt')` (returned as tz-naive by Motor from Mongo BSON) with `datetime.now(timezone.utc)` (tz-aware), raising `TypeError: can't compare offset-naive and offset-aware datetimes` → every valid reset-token attempt returned HTTP 500. Fix: coerce `exp` to tz-aware UTC before comparison (added `if isinstance(exp, datetime) and exp.tzinfo is None: exp = exp.replace(tzinfo=timezone.utc)`). E1 should adopt this pattern for any future datetime read-back from Mongo (login_attempts, subscriptions, etc.). This bug would have blocked ALL production users from resetting passwords despite the token-issuance flow appearing to work.",
+    "Minor UX: the forgot-sent panel says 'Om <email> finns registrerad har vi skickat…' — good no-enumeration wording. However the panel is on the /glomt-losenord route with no way to resubmit a different email without navigating back manually. A 'Skicka till en annan adress' link would be nice, but not blocking.",
+    "Minor security: reset-password IP rate limit is 10/hour — a bit generous for a security-critical endpoint. Consider 5/hour to match forgot-password IP cap.",
+    "Positive: `password_reset_tokens.update_many` invalidates other outstanding tokens after successful reset — good defensive practice. `X-Forwarded-For` is honoured properly via client_ip() helper. `secrets.token_urlsafe(48)` gives 64 URL-safe chars (>384 bits entropy) — solid.",
+    "Positive: link 'Glömt lösenord?' is correctly gated by `mode === 'login'` (Login.jsx:182), so element is entirely removed from DOM in register mode — verified in Playwright."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (lines 637-643: tz-aware coercion of expires_at_dt before comparison)",
+    "/app/backend/tests/test_password_reset.py (new — 8 pytest cases)"
+  ],
+  "success_rate": {"backend": "100% (8/8 after fix)", "frontend": "100% (5/5 UI flows)"},
+  "test_credentials": "Admin habib.nazary@hotmail.com / Jordgubbe234@u — VERIFIED restored and working after tests (final login → 200).",
+  "seed_data_creation": "Ephemeral: one throwaway user (uitester+<uuid>@example.com) plus reset token created directly in Mongo to exercise the UI /aterstall-losenord/:token flow — both deleted at end of the run. Various rate-limit-test emails (iprate+, emailrate+, nobody+) leave zero user rows (no user creation), only rate-limit buckets which are in-memory and expire in 1h.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Password reset (POST /api/auth/forgot-password + /api/auth/reset-password) fully working. IP rate-limit=5/hr, email rate-limit=3/hr for forgot; reset endpoint IP=10/hr. Motor returns Mongo datetimes as tz-naive — always coerce to UTC before comparing (pattern applied at server.py:640-643 as a reference). password_reset_tokens has TTL index on expires_at_dt. UI testids: link-forgot-password, forgot-form, forgot-input-email, forgot-submit, forgot-sent; reset-form, reset-input-password, reset-input-confirm, reset-submit, reset-done. In-memory rate-limit buckets across tests: after this run, IP buckets for random 10.99.x.x IPs are used but per-email bucket for habib.nazary@hotmail.com may be at limit (3/3) for ~1h.",
+  "rca of the issue": "ROOT CAUSE: server.py reset_password() read `doc.get('expires_at_dt')` — this field was inserted via Motor with a tz-aware `datetime` (line 542 uses `datetime.now(timezone.utc)` + timedelta) but Mongo BSON strips the tz info on round-trip, so Motor deserializes it as *tz-naive*. Line 641 then did `exp < datetime.now(timezone.utc)` (tz-aware) → Python raises TypeError → FastAPI turns it into HTTP 500. FIX: after loading, check `isinstance(exp, datetime) and exp.tzinfo is None` and set `exp = exp.replace(tzinfo=timezone.utc)`. Reproduction: any successful forgot-password → reset-password with the returned token → 500. Applied fix at /app/backend/server.py lines 637-643; all 8 pytest cases now pass and full end-to-end UI flow works."
+}

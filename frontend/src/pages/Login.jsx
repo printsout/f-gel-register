@@ -179,6 +179,17 @@ export default function Login() {
                                     }
                                 />
                             </div>
+                            {mode === "login" && (
+                                <div className="mt-1.5 text-right">
+                                    <Link
+                                        to="/glomt-losenord"
+                                        className="text-xs text-muted-foreground hover:text-primary"
+                                        data-testid="link-forgot-password"
+                                    >
+                                        Glömt lösenord?
+                                    </Link>
+                                </div>
+                            )}
                         </div>
                         <Button
                             type="submit"
