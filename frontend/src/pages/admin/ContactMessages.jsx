@@ -78,6 +78,7 @@ export default function AdminContactMessages() {
     };
     useEffect(() => {
         load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const filtered = status === "all" ? items : items.filter((m) => m.status === status);

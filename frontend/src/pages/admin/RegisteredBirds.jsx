@@ -104,7 +104,6 @@ export default function RegisteredBirds() {
     useEffect(() => {
         const t = setTimeout(load, 200);
         return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [q, status]);
 
     const doDelete = async () => {

@@ -245,7 +245,6 @@ export default function AdminMissingBirds() {
     useEffect(() => {
         const t = setTimeout(load, 200);
         return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, q]);
 
     const updateStatus = async (report, updates) => {

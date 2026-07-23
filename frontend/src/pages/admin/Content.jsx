@@ -76,6 +76,7 @@ export default function AdminContent() {
 
     useEffect(() => {
         load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const openNew = () => {
@@ -165,7 +166,7 @@ export default function AdminContent() {
                         Innehåll
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Hantera sidor som "Om oss", "Kontakt" och villkor
+                        Hantera sidor som &quot;Om oss&quot;, &quot;Kontakt&quot; och villkor
                     </p>
                 </div>
                 <Button onClick={openNew} data-testid="button-new-content">
@@ -393,7 +394,7 @@ export default function AdminContent() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Ta bort sida?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            "{confirmDelete?.title}" (/{confirmDelete?.slug}) tas
+                            &quot;{confirmDelete?.title}&quot; (/{confirmDelete?.slug}) tas
                             bort permanent.
                         </AlertDialogDescription>
                     </AlertDialogHeader>

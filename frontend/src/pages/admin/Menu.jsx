@@ -163,6 +163,7 @@ export default function AdminMenu() {
     };
     useEffect(() => {
         load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Group into tree
@@ -451,7 +452,7 @@ export default function AdminMenu() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Ta bort menyval?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            "{confirmDelete?.label}" tas bort permanent
+                            &quot;{confirmDelete?.label}&quot; tas bort permanent
                             {items.some((i) => i.parent_id === confirmDelete?.id)
                                 ? ", inklusive alla dess underval."
                                 : "."}

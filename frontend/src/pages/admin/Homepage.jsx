@@ -609,7 +609,6 @@ export default function AdminHomepage() {
     }, []);
     useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const updateLocal = (id, patch) => {
@@ -921,7 +920,7 @@ export default function AdminHomepage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Ta bort sektion?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            "{confirmDelete?.label}" tas bort permanent från startsidan.
+                            &quot;{confirmDelete?.label}&quot; tas bort permanent från startsidan.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

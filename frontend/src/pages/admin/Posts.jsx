@@ -195,7 +195,6 @@ export default function AdminPosts() {
 
     useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status]);
 
     const approve = async (post) => {
@@ -431,7 +430,7 @@ export default function AdminPosts() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Ta bort inlägg?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            "{confirmDelete?.title}" tas bort permanent.
+                            &quot;{confirmDelete?.title}&quot; tas bort permanent.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
