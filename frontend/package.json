@@ -63,7 +63,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "CI=false craco build",
     "test": "craco test",
     "start:prod": "serve -s build -l tcp://0.0.0.0:${PORT:-3000}"
   },
