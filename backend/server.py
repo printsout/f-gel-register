@@ -98,6 +98,17 @@ app = FastAPI(title="Papegojregistret API")
 api = APIRouter(prefix="/api")
 
 
+@app.get("/")
+async def root_healthcheck():
+    """Root endpoint so Railway/uptime healthchecks get 200 OK."""
+    return {"status": "ok", "service": "papegojregistret-api"}
+
+
+@app.get("/health")
+async def app_healthcheck():
+    return {"status": "ok"}
+
+
 # ----------------------------------------------------------------------------
 # Helpers – password + JWT (imports from lib/security.py, kept exported at
 # module scope for backwards compatibility with unit tests)
