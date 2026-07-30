@@ -141,6 +141,32 @@ def create_refresh_token(user_id: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
 
+# ----------------------------------------------------------------------------
+# App-level settings (admin-editable pricing etc.)
+# ----------------------------------------------------------------------------
+DEFAULT_REGISTRATION_FEE_KR = 300
+DEFAULT_MEMBERSHIP_FEE_KR = 100
+
+
+async def get_price_settings() -> dict:
+    doc = await db.app_settings.find_one({"key": "prices"}, {"_id": 0})
+    doc = doc or {}
+    return {
+        "registration_fee_kr": int(doc.get("registration_fee_kr") or DEFAULT_REGISTRATION_FEE_KR),
+        "membership_fee_kr": int(doc.get("membership_fee_kr") or DEFAULT_MEMBERSHIP_FEE_KR),
+    }
+
+
+class PriceSettingsInput(BaseModel):
+    registration_fee_kr: int = Field(ge=0, le=100000)
+    membership_fee_kr: int = Field(ge=0, le=100000)
+
+
+@api.get("/settings/prices")
+async def public_price_settings():
+    return await get_price_settings()
+
+
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     response.set_cookie(
         "access_token", access_token,
@@ -1093,8 +1119,8 @@ async def create_registered_bird(data: BirdInput, request: Request):
         "registration_date": datetime.now(timezone.utc).date().isoformat(),
         "payment_status": "pending",
         "stripe_payment_intent_id": None,
-        "registration_fee_amount": 300,
-        "annual_fee_amount": 100,
+        "registration_fee_amount": reg_fee,
+        "annual_fee_amount": mem_fee,
         "annual_fee_paid_until": None,
         "discount_code_id": discount_code_id,
         "final_amount": final_amount,
@@ -1114,7 +1140,7 @@ async def create_registered_bird(data: BirdInput, request: Request):
     membership_active = bool(user_doc and user_doc.get("membership_active"))
 
     try:
-        checkout = _build_bird_checkout_session(
+        checkout = await _build_bird_checkout_session(
             bird_ids=[bird["id"]],
             user_id=current_user_id,
             user_email=current_user_email,
@@ -3281,7 +3307,7 @@ async def bulk_cancel_payment_plans(payload: BulkIdsInput, admin: dict = Depends
 # ----------------------------------------------------------------------------
 # Stripe – Checkout, status polling, webhook
 # ----------------------------------------------------------------------------
-def _build_bird_checkout_session(
+async def _build_bird_checkout_session(
     *,
     bird_ids: List[str],
     user_id: Optional[str],
@@ -3295,22 +3321,29 @@ def _build_bird_checkout_session(
 
     Returns dict with checkout_url, session_id and amount_total (SEK, in öre).
     """
-    reg_prices = stripe.Price.list(
-        lookup_keys=[BIRD_REGISTRATION_LOOKUP_KEY], active=True, limit=1
-    ).data
-    if not reg_prices:
-        raise HTTPException(status_code=500, detail="Registreringspris saknas i Stripe.")
-    reg_price = reg_prices[0]
+    prices = await get_price_settings()
+    reg_fee_ore = prices["registration_fee_kr"] * 100
+    mem_fee_ore = prices["membership_fee_kr"] * 100
 
-    line_items = [{"price": reg_price.id, "quantity": max(1, len(bird_ids))}]
+    line_items = [{
+        "price_data": {
+            "currency": "sek",
+            "product_data": {"name": "Fågelregistrering"},
+            "unit_amount": reg_fee_ore,
+        },
+        "quantity": max(1, len(bird_ids)),
+    }]
 
     if include_membership:
-        mem_prices = stripe.Price.list(
-            lookup_keys=[MEMBERSHIP_LOOKUP_KEY], active=True, limit=1
-        ).data
-        if not mem_prices:
-            raise HTTPException(status_code=500, detail="Medlemskapspris saknas i Stripe.")
-        line_items.append({"price": mem_prices[0].id, "quantity": 1})
+        line_items.append({
+            "price_data": {
+                "currency": "sek",
+                "product_data": {"name": "Årsmedlemskap"},
+                "unit_amount": mem_fee_ore,
+                "recurring": {"interval": "year"},
+            },
+            "quantity": 1,
+        })
         mode = "subscription"
     else:
         mode = "payment"
@@ -3348,9 +3381,9 @@ def _build_bird_checkout_session(
         else:
             raise
 
-    amount_total = (reg_price.unit_amount or 0) * max(1, len(bird_ids))
+    amount_total = reg_fee_ore * max(1, len(bird_ids))
     if include_membership:
-        amount_total += mem_prices[0].unit_amount or 0
+        amount_total += mem_fee_ore
     return {
         "checkout_url": session.url,
         "session_id": session.id,
@@ -3642,6 +3675,34 @@ async def stripe_webhook(request: Request):
 
 
 # Include router + CORS
+@api.get("/admin/settings/prices")
+async def admin_get_price_settings(_: dict = Depends(require_admin)):
+    return await get_price_settings()
+
+
+@api.patch("/admin/settings/prices")
+async def admin_update_price_settings(
+    data: PriceSettingsInput, admin: dict = Depends(require_admin)
+):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.app_settings.update_one(
+        {"key": "prices"},
+        {"$set": {
+            "key": "prices",
+            "registration_fee_kr": data.registration_fee_kr,
+            "membership_fee_kr": data.membership_fee_kr,
+            "updated_at": now_iso,
+            "updated_by": admin["user_id"],
+        }},
+        upsert=True,
+    )
+    await log_activity(
+        admin["user_id"], admin["email"], "admin.settings.prices.update", "prices",
+        {"registration_fee_kr": data.registration_fee_kr, "membership_fee_kr": data.membership_fee_kr},
+    )
+    return await get_price_settings()
+
+
 app.include_router(api)
 
 # CORS: allow the frontend origin from env, plus wildcard for localhost dev

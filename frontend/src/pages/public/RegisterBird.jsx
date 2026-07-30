@@ -57,11 +57,30 @@ export default function RegisterBird() {
         }
     }, [user]);
 
+    // Fetch dynamic prices from backend on mount
+    useEffect(() => {
+        api.get("/settings/prices")
+            .then(({ data }) => {
+                const reg = Number(data.registration_fee_kr) || 300;
+                const mem = Number(data.membership_fee_kr) || 100;
+                setPriceInfo((p) => ({
+                    ...p,
+                    registration: reg,
+                    membership: user?.membership_active ? 0 : mem,
+                    base_registration: reg,
+                    base_membership: mem,
+                }));
+            })
+            .catch(() => { /* keep defaults */ });
+    }, [user]);
+
     // Live price calculation — validates the discount code with the backend as the
     // user types. Debounced. Shows total to the user before Stripe redirect.
     const [priceInfo, setPriceInfo] = useState({
         registration: 300,
         membership: user?.membership_active ? 0 : 100,
+        base_registration: 300,
+        base_membership: 100,
         discount_amount: 0,
         discount_percent: 0,
         discount_type: null, // "percent" | "amount" | null

@@ -37,6 +37,7 @@ const NAV = [
     { to: "/admin/discount-codes", label: "Rabattkoder", icon: TicketIcon },
     { to: "/admin/payment-plans", label: "Betalningsplaner", icon: CurrencyCircleDollar },
     { to: "/admin/ownership-transfers", label: "Ägarbyten", icon: ArrowsClockwise },
+    { to: "/admin/priser", label: "Priser", icon: CurrencyCircleDollar },
     { to: "/admin/content", label: "Innehåll", icon: FileText },
     { to: "/admin/comments", label: "Kommentarer", icon: ChatCircleDots },
     { to: "/admin/contact-messages", label: "Meddelanden", icon: EnvelopeSimple },

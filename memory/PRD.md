@@ -103,8 +103,12 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - ✅ E2E verified: created 3 test users → header select-all → bulk delete 2 → toast "2 användare borttagna" + row count drops from 4 → 2.
 
 ## Backlog (P0/P1/P2)
-### Recently completed (2026-07-21)
-- ✅ **Ägarbyte-flöde**: nytt publikt formulär `/agarbyte` där inloggad ägare fyller i både sina egna och nya ägarens uppgifter (namn, e-post, adress, telefon). Ny adminsida `/admin/ownership-transfers` med godkänn/avslå-flöde. Vid godkännande: konto skapas automatiskt för ny ägare om det saknas (tempoärt lösenord skickas per e-post), fågelns ägare uppdateras, medlemsavgiften får 14 dagars betalningsfrist, både gammal och ny ägare får e-postnotis. Admin får notis när begäran skapas. E2E-testat via curl.
+### Recently completed (2026-07-30)
+- ✅ **Admin-editerbara priser**: Ny adminsida `/admin/priser` med två fält (Registreringsavgift, Årsmedlemsavgift). Backend har `GET /api/settings/prices` (public) och `PATCH /api/admin/settings/prices` (admin) som lagrar värden i `app_settings`-collection. Stripe Checkout bygger `price_data` inline med aktuella priser, så ändringar slår igenom direkt vid nästa registrering. `RegisterBird.jsx` hämtar priserna dynamiskt vid page-load.
+- ✅ **Cross-site auth fix**: Login/register/refresh returnerar nu `access_token` + `refresh_token` i JSON body. Frontend `api.js` sparar dem i `localStorage` och skickar som `Authorization: Bearer` header vid varje anrop. Silent refresh vid 401. Kringgår tredjepartscookie-blockering i Safari/Chrome när frontend och backend ligger på olika Railway-subdomäner.
+- ✅ **Railway deployment**: Procfile, `.nvmrc`, `.python-version`, `engines.node=20.x`, `http-server` för frontend. MongoDB Atlas M0 för databas.
+
+
 - ✅ **Resend/Emergent-managed email**: enhetlig hjälpare `send_platform_email()`. Reply-To sätts på kontaktnotiser och registreringsbekräftelser. Ny transaktionell mall "Tack för din registrering" skickas efter Stripe-betalning. Tre transaktionsmallar totalt (reset, kontakt, registrering + ägarbyte-mallar).
 - ✅ Discount codes: procent (%) och fast kr som typval. Admin UI + hero-bubbla + live-pris.
 - ✅ Registration form: e-post + adress + placeholder "Skriv gärna fågelnamnet" + utökad ringnummer-text.

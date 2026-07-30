@@ -36,6 +36,7 @@ import AdminPaymentPlans from "@/pages/admin/PaymentPlans";
 import AdminContactMessages from "@/pages/admin/ContactMessages";
 import OwnershipTransfer from "@/pages/public/OwnershipTransfer";
 import OwnershipTransfersAdmin from "@/pages/admin/OwnershipTransfers";
+import PriceSettings from "@/pages/admin/PriceSettings";
 import CookieConsent from "@/components/CookieConsent";
 
 function AppRoutes() {
@@ -187,6 +188,14 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <OwnershipTransfersAdmin />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/priser"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <PriceSettings />
                     </ProtectedRoute>
                 }
             />
