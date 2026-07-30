@@ -1,0 +1,47 @@
+{
+  "summary": "Iter 20 – Backend regression after Railway requirements.txt cleanup (removed emergentintegrations line and any litellm@customer-assets wheel). Verified backend starts cleanly, /api/ root returns 200, and all 10 required endpoints from the review request behave correctly. 11/11 pytest cases pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    {"case": "GET /api/ (health) → 200", "result": "PASS"},
+    {"case": "GET /api/settings/prices → 200 {registration_fee_kr,membership_fee_kr}", "result": "PASS"},
+    {"case": "GET /api/site-texts → 200 dict", "result": "PASS"},
+    {"case": "POST /api/auth/login admin → 200 with access_token+refresh_token in JSON body", "result": "PASS"},
+    {"case": "GET /api/auth/2fa/status (Bearer) → 200 {enabled:false}", "result": "PASS"},
+    {"case": "POST /api/auth/2fa/setup (Bearer) → 200 {secret, otpauth_uri: otpauth://…}", "result": "PASS"},
+    {"case": "POST /api/auth/register weak password 'weak' → 400 with Swedish message about password strength", "result": "PASS"},
+    {"case": "POST /api/auth/register strong 'Str0ng!Pass2026' → 200/201 with access_token", "result": "PASS"},
+    {"case": "PATCH /api/admin/settings/prices → 200; public GET reflects new values; restored originals after test", "result": "PASS"},
+    {"case": "PATCH /api/admin/site-texts/{key} → 200; public GET /api/site-texts includes new key/value", "result": "PASS"},
+    {"case": "Cleanup: TEST_ user + TEST_iter20_* site-texts removed from Mongo", "result": "PASS"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter20_railway_cleanup.py",
+    "/app/test_reports/pytest/iter20_railway.xml"
+  ],
+  "action_items": [
+    "None from backend testing. requirements.txt confirmed clean (no emergentintegrations, no litellm customer-assets URL). Railway deploy should now succeed with the currently pinned dependency set."
+  ],
+  "critical_code_review_comments": [
+    "requirements.txt (233 packages) is very heavy — likely bloated from a `pip freeze` inside the container. Suggest E1 slim this down to actually-imported top-level deps for faster Railway builds (e.g. drop pandas 3.0.3, boto3, black/mypy/flake8/isort dev tools, google-* stack if not used at runtime, huggingface_hub, tokenizers, tiktoken, openai, etc.). Not blocking but will materially cut cold-start time.",
+    "Positive: /api/auth/login returns both access_token and refresh_token in JSON body AND sets httpOnly cookies — dual mode works for Bearer clients (React from a different origin) and cookie clients.",
+    "Positive: /auth/2fa/setup persists totp_secret_pending (not totp_secret) — correct staging pattern; only 2fa/enable promotes it after successful TOTP verify.",
+    "Minor: /admin/site-texts has no DELETE endpoint — any accidentally-created key stays forever. Consider adding DELETE /admin/site-texts/{key} for cleanup. Testing agent had to clean up via direct mongosh.",
+    "Positive: PriceSettingsInput uses Field(ge=0, le=100000) — good input validation prevents negative/absurd prices."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "N/A (frontend not requested)"},
+  "test_credentials": "Admin habib.nazary@hotmail.com / Jordgubbe234@u — verified working (login returns 200 with access_token+refresh_token). Test user + test site-text keys created during run were cleaned up via mongosh at end of test module.",
+  "seed_data_creation": "Ephemeral: 1 test user (strongpw+<uuid>@example.com) + 1 site_texts row (TEST_iter20_<uuid>) created during tests; both deleted at end of run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend post-Railway-cleanup verified 100%. requirements.txt is clean of emergentintegrations and customer-assets litellm URL. Bearer-token auth flow works end-to-end (login → 2FA status/setup → admin PATCH endpoints). Swedish password-strength validation is enforced on /auth/register. Test file lives at /app/backend/tests/test_iter20_railway_cleanup.py and is safe to re-run (self-cleans).",
+  "rca of the issue": "N/A — no bugs found this iteration. Original Railway crash (`No matching distribution found for emergentintegrations==0.2.0`) is resolved: that line and the customer-assets litellm wheel URL are no longer in /app/backend/requirements.txt. Confirmed via `grep -n 'emergent\\|litellm' /app/backend/requirements.txt` → no matches."
+}
