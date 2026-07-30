@@ -44,13 +44,17 @@ export default function Contact() {
             <BackHeader label="Kontakta oss" />
             <div className="max-w-3xl mx-auto px-6 py-10">
                 <div className="mb-8">
-                    <p className="label-caps mb-2">Kontakt</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-bold">
-                        Hör av dig
+                    <p className="label-caps mb-2">
+                        {useSiteText("contact.eyebrow", "Kontakt")}
+                    </p>
+                    <h1 className="text-3xl md:text-4xl font-display font-bold" data-testid="contact-title">
+                        {useSiteText("contact.title", "Hör av dig")}
                     </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Har du en fråga om registrering, hittad fågel eller något annat?
-                        Fyll i formuläret så återkommer vi.
+                    <p className="text-muted-foreground mt-1" data-testid="contact-subtitle">
+                        {useSiteText(
+                            "contact.subtitle",
+                            "Har du en fråga om registrering, hittad fågel eller något annat? Fyll i formuläret så återkommer vi.",
+                        )}
                     </p>
                 </div>
 

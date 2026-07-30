@@ -133,6 +133,18 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - Migrate `@app.on_event` to lifespan context manager.
 
 ## Test credentials (see `/app/memory/test_credentials.md`)
-- habib.nazary@hotmail.com / Jordgubbe234@u (admin)
+- habib.nazary@hotmail.com / Jordgubbe234@u (admin, 2FA disabled locally)
 - test@papegojregistret.se / Test123! (user, with 5 sample birds)
 - Seeded discount code: `PARROTS15` (15% off, type=percent)
+
+## Iteration 12 (2026-02): SiteTexts fullständig koppling
+- ✅ `SiteTextsContext` – global provider som hämtar `/api/site-texts` en gång vid mount, exponerar `useSiteText(key, fallback)` och `useSiteTexts()`. Uppdaterar även `document.title` när admin ändrar `site.title`.
+- ✅ Adminvyn `/admin/texter` uppgraderad med 10 grupper (Global header/footer, Startsida-fallback, Login/registrera konto, Kontakt, Registrera fågel, Rapportera hittad/saknad, Hittade fåglar, Ägarbyte, Mina sidor, Admin) + 43 fördefinierade nycklar med tydliga labels och fallback. Egna nycklar kan läggas till och listas separat.
+- ✅ `PATCH /api/admin/site-texts/{key}` triggar `refresh()` i providern så publika sidor uppdateras direkt utan sidladdning.
+- ✅ Publika sidor med `useSiteText`-koppling: `Landing` (fallback), `Contact` (eyebrow/rubrik/undertext/email/telefon/svarstid), `RegisterBird` (titel/undertext/villkor/knapp), `ReportMissing` (titel/undertext/privacy-notis), `ReportFound` (titel/undertext), `FoundBirdsList` (titel/undertext/tomt läge), `OwnershipTransfer` (titel/undertext), `MyBirds` (eyebrow/titel), `Login` (eyebrow/titel/undertext/knappar/hero), `PublicHeader` (Mina sidor/Admin/Logga in), `PublicFooter` (copyright/kontakta oss).
+- ✅ Buggfix: `Landing.jsx` refererade `welcomeTitle` som aldrig deklarerades — ersatt med `landing.fallback.*` nycklar.
+- ✅ Alla hook-anrop hoisted till toppen av komponenter (`react-hooks/rules-of-hooks`-fel eliminerade).
+- ✅ Backend-tester: iteration_21.json 17/17 pytest passing (site-texts CRUD, 2FA setup→enable→disable via pyotp, regression på public-endpoints).
+- ✅ Frontend E2E verifierat: admin patch → publika kontaktsida visar nytt värde efter reload.
+- ✅ Säkerhetschecklista skapad: `/app/memory/secret_rotation_checklist.md` med steg för Atlas, JWT, Stripe, Resend, adminlösenord.
+
