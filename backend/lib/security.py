@@ -3,10 +3,12 @@ so they can be unit-tested in isolation and re-used across future route modules.
 """
 from __future__ import annotations
 
+import re as _re
 import time as _t
 from typing import Dict, List
 
 import bcrypt
+import pyotp
 from fastapi import HTTPException, Request
 
 # ----------------------------------------------------------------------------
@@ -20,6 +22,47 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
     except ValueError:
+        return False
+
+
+# ----------------------------------------------------------------------------
+# Password strength policy
+# ----------------------------------------------------------------------------
+def validate_password_strength(pw: str) -> None:
+    """Raise HTTPException(400) if the password doesn't meet the policy."""
+    problems: List[str] = []
+    if len(pw) < 10:
+        problems.append("minst 10 tecken")
+    if not _re.search(r"[A-ZÅÄÖ]", pw):
+        problems.append("en stor bokstav")
+    if not _re.search(r"[a-zåäö]", pw):
+        problems.append("en liten bokstav")
+    if not _re.search(r"[0-9]", pw):
+        problems.append("en siffra")
+    if not _re.search(r"[^A-Za-zÅÄÖåäö0-9]", pw):
+        problems.append("ett specialtecken")
+    if problems:
+        raise HTTPException(
+            status_code=400,
+            detail="Lösenordet måste innehålla " + ", ".join(problems) + ".",
+        )
+
+
+# ----------------------------------------------------------------------------
+# TOTP (Time-based One-Time Password) helpers for 2FA
+# ----------------------------------------------------------------------------
+def generate_totp_secret() -> str:
+    return pyotp.random_base32()
+
+
+def totp_provisioning_uri(secret: str, email: str, issuer: str = "Fågelregister") -> str:
+    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=issuer)
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    try:
+        return pyotp.TOTP(secret).verify(code.strip(), valid_window=1)
+    except Exception:  # noqa: BLE001
         return False
 
 

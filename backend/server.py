@@ -116,6 +116,10 @@ async def app_healthcheck():
 from lib.security import (  # noqa: E402
     hash_password,
     verify_password,
+    validate_password_strength,
+    generate_totp_secret,
+    totp_provisioning_uri,
+    verify_totp,
     client_ip as _client_ip,
     rate_limit,
 )
@@ -270,7 +274,7 @@ def _normalize_ring(raw: Optional[str]) -> Optional[str]:
 
 class RegisterInput(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=1)
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
@@ -278,6 +282,20 @@ class RegisterInput(BaseModel):
 class LoginInput(BaseModel):
     email: EmailStr
     password: str
+    totp_code: Optional[str] = None
+
+
+class TwoFactorSetupInput(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class TwoFactorDisableInput(BaseModel):
+    password: str
+    code: str = Field(min_length=6, max_length=8)
+
+
+class SiteTextUpdate(BaseModel):
+    value: str = Field(max_length=2000)
 
 
 class GoogleSessionInput(BaseModel):
@@ -290,7 +308,7 @@ class ForgotPasswordInput(BaseModel):
 
 class ResetPasswordInput(BaseModel):
     token: str = Field(min_length=32, max_length=128)
-    new_password: str = Field(min_length=6, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
 
 
 class BirdInput(BaseModel):
@@ -530,6 +548,8 @@ async def register(data: RegisterInput, request: Request, response: Response):
     if existing:
         raise HTTPException(status_code=400, detail="E-postadressen är redan registrerad")
 
+    validate_password_strength(data.password)
+
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     role = "admin" if email == ADMIN_EMAIL.lower() else "user"
     doc = {
@@ -573,6 +593,16 @@ async def login(data: LoginInput, request: Request, response: Response):
         raise HTTPException(status_code=403, detail="Kontot är blockerat")
     if not verify_password(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Fel e-post eller lösenord")
+
+    # If 2FA is enabled, require TOTP code
+    if user.get("totp_enabled"):
+        if not data.totp_code:
+            raise HTTPException(status_code=401, detail={
+                "code": "TOTP_REQUIRED",
+                "message": "Ange 6-siffrig kod från din authenticator-app",
+            })
+        if not verify_totp(user.get("totp_secret") or "", data.totp_code):
+            raise HTTPException(status_code=401, detail="Fel authenticator-kod")
 
     access = create_access_token(user["user_id"], email, user.get("role", "user"))
     refresh = create_refresh_token(user["user_id"])
@@ -915,6 +945,7 @@ async def reset_password(data: ResetPasswordInput, request: Request):
         raise HTTPException(status_code=400, detail="Kontot finns inte längre")
 
     # Update password + mark token used atomically (best effort)
+    validate_password_strength(data.new_password)
     new_hash = hash_password(data.new_password)
     now = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
@@ -3701,6 +3732,87 @@ async def admin_update_price_settings(
         {"registration_fee_kr": data.registration_fee_kr, "membership_fee_kr": data.membership_fee_kr},
     )
     return await get_price_settings()
+
+
+
+# ---- 2FA (TOTP) endpoints ----
+@api.post("/auth/2fa/setup")
+async def two_factor_setup(user: dict = Depends(get_current_user)):
+    secret = generate_totp_secret()
+    uri = totp_provisioning_uri(secret, user["email"])
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"totp_secret_pending": secret, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"secret": secret, "otpauth_uri": uri, "issuer": "Fågelregister", "email": user["email"]}
+
+
+@api.post("/auth/2fa/enable")
+async def two_factor_enable(data: TwoFactorSetupInput, user: dict = Depends(get_current_user)):
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    pending = (fresh or {}).get("totp_secret_pending")
+    if not pending:
+        raise HTTPException(status_code=400, detail="Ingen 2FA-uppsättning pågår")
+    if not verify_totp(pending, data.code):
+        raise HTTPException(status_code=400, detail="Fel kod — prova igen")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {
+            "$set": {"totp_secret": pending, "totp_enabled": True,
+                     "updated_at": datetime.now(timezone.utc).isoformat()},
+            "$unset": {"totp_secret_pending": ""},
+        },
+    )
+    await log_activity(user["user_id"], user["email"], "user.2fa.enable", user["user_id"])
+    return {"success": True}
+
+
+@api.post("/auth/2fa/disable")
+async def two_factor_disable(data: TwoFactorDisableInput, user: dict = Depends(get_current_user)):
+    fresh = await db.users.find_one({"user_id": user["user_id"]})
+    if not fresh or not verify_password(data.password, fresh.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Fel lösenord")
+    if not verify_totp(fresh.get("totp_secret") or "", data.code):
+        raise HTTPException(status_code=400, detail="Fel authenticator-kod")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {
+            "$set": {"totp_enabled": False, "updated_at": datetime.now(timezone.utc).isoformat()},
+            "$unset": {"totp_secret": "", "totp_secret_pending": ""},
+        },
+    )
+    await log_activity(user["user_id"], user["email"], "user.2fa.disable", user["user_id"])
+    return {"success": True}
+
+
+@api.get("/auth/2fa/status")
+async def two_factor_status(user: dict = Depends(get_current_user)):
+    fresh = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "totp_enabled": 1})
+    return {"enabled": bool((fresh or {}).get("totp_enabled"))}
+
+
+# ---- Site texts (admin-editable UI strings) ----
+@api.get("/site-texts")
+async def public_site_texts():
+    cursor = db.site_texts.find({}, {"_id": 0})
+    return {d["key"]: d.get("value", "") for d in await cursor.to_list(1000)}
+
+
+@api.get("/admin/site-texts")
+async def admin_site_texts(_: dict = Depends(require_admin)):
+    cursor = db.site_texts.find({}, {"_id": 0}).sort("key", 1)
+    return await cursor.to_list(1000)
+
+
+@api.patch("/admin/site-texts/{key}")
+async def admin_update_site_text(key: str, data: SiteTextUpdate, admin: dict = Depends(require_admin)):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.site_texts.update_one(
+        {"key": key},
+        {"$set": {"key": key, "value": data.value, "updated_at": now_iso, "updated_by": admin["user_id"]}},
+        upsert=True,
+    )
+    return {"key": key, "value": data.value}
 
 
 app.include_router(api)

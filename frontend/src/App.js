@@ -37,6 +37,8 @@ import AdminContactMessages from "@/pages/admin/ContactMessages";
 import OwnershipTransfer from "@/pages/public/OwnershipTransfer";
 import OwnershipTransfersAdmin from "@/pages/admin/OwnershipTransfers";
 import PriceSettings from "@/pages/admin/PriceSettings";
+import SiteTexts from "@/pages/admin/SiteTexts";
+import TwoFactor from "@/pages/admin/TwoFactor";
 import CookieConsent from "@/components/CookieConsent";
 
 function AppRoutes() {
@@ -196,6 +198,22 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute requireAdmin>
                         <PriceSettings />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/texter"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <SiteTexts />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/2fa"
+                element={
+                    <ProtectedRoute requireAdmin>
+                        <TwoFactor />
                     </ProtectedRoute>
                 }
             />

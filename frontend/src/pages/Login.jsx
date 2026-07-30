@@ -18,7 +18,9 @@ export default function Login() {
         password: "",
         first_name: "",
         last_name: "",
+        totp_code: "",
     });
+    const [needsTotp, setNeedsTotp] = useState(false);
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
@@ -34,14 +36,20 @@ export default function Login() {
         try {
             const u =
                 mode === "login"
-                    ? await login(form.email, form.password)
+                    ? await login(form.email, form.password, form.totp_code || undefined)
                     : await register(form);
             toast.success(mode === "login" ? "Inloggad!" : "Konto skapat!");
             const from = location.state?.from;
             const to = u.role === "admin" ? "/admin" : from || "/";
             navigate(to, { replace: true });
         } catch (err) {
-            toast.error(formatApiError(err));
+            const detail = err?.response?.data?.detail;
+            if (detail && typeof detail === "object" && detail.code === "TOTP_REQUIRED") {
+                setNeedsTotp(true);
+                toast.info(detail.message || "Ange 6-siffrig kod från din authenticator-app");
+            } else {
+                toast.error(formatApiError(err));
+            }
         } finally {
             setBusy(false);
         }
@@ -168,7 +176,7 @@ export default function Login() {
                                             : "new-password"
                                     }
                                     className="pl-10 h-11"
-                                    placeholder="Minst 6 tecken"
+                                    placeholder={mode === "register" ? "Minst 10 tecken, stor + liten bokstav, siffra, specialtecken" : "Minst 6 tecken"}
                                     data-testid="input-password"
                                     value={form.password}
                                     onChange={(e) =>
@@ -191,6 +199,30 @@ export default function Login() {
                                 </div>
                             )}
                         </div>
+                        {needsTotp && mode === "login" && (
+                            <div>
+                                <label className="text-sm font-medium">
+                                    Kod från authenticator (6 siffror)
+                                </label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    maxLength={8}
+                                    className="mt-1 w-full h-11 px-3 rounded-md border border-input bg-background text-center text-lg tracking-widest font-mono"
+                                    placeholder="123456"
+                                    value={form.totp_code}
+                                    onChange={(e) =>
+                                        setForm({ ...form, totp_code: e.target.value })
+                                    }
+                                    data-testid="input-totp-code"
+                                    autoFocus
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Öppna din authenticator-app och ange den 6-siffriga koden.
+                                </p>
+                            </div>
+                        )}
                         <Button
                             type="submit"
                             disabled={busy}

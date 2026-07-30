@@ -21,6 +21,8 @@ import {
     CurrencyCircleDollar,
     EnvelopeSimple,
     ArrowsClockwise,
+    TextT,
+    ShieldCheck as ShieldCheckIcon,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,8 @@ const NAV = [
     { to: "/admin/payment-plans", label: "Betalningsplaner", icon: CurrencyCircleDollar },
     { to: "/admin/ownership-transfers", label: "Ägarbyten", icon: ArrowsClockwise },
     { to: "/admin/priser", label: "Priser", icon: CurrencyCircleDollar },
+    { to: "/admin/texter", label: "Sidtexter", icon: TextT },
+    { to: "/admin/2fa", label: "Tvåfaktor (2FA)", icon: ShieldCheckIcon },
     { to: "/admin/content", label: "Innehåll", icon: FileText },
     { to: "/admin/comments", label: "Kommentarer", icon: ChatCircleDots },
     { to: "/admin/contact-messages", label: "Meddelanden", icon: EnvelopeSimple },

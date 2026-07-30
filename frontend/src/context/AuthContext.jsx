@@ -34,9 +34,11 @@ export function AuthProvider({ children }) {
         refreshUser();
     }, [refreshUser]);
 
-    const login = async (email, password) => {
+    const login = async (email, password, totp_code) => {
         setError(null);
-        const { data } = await api.post("/auth/login", { email, password });
+        const payload = { email, password };
+        if (totp_code) payload.totp_code = totp_code;
+        const { data } = await api.post("/auth/login", payload);
         setUser(data);
         return data;
     };
