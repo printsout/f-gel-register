@@ -40,6 +40,7 @@ import PriceSettings from "@/pages/admin/PriceSettings";
 import SiteTexts from "@/pages/admin/SiteTexts";
 import TwoFactor from "@/pages/admin/TwoFactor";
 import CookieConsent from "@/components/CookieConsent";
+import { SiteTextsProvider } from "@/context/SiteTextsContext";
 
 function AppRoutes() {
     const location = useLocation();
@@ -226,18 +227,20 @@ export default function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
-                <AppRoutes />
-                <CookieConsent />
-                <Toaster
-                    position="top-right"
-                    richColors
-                    closeButton
-                    toastOptions={{
-                        classNames: {
-                            toast: "font-sans",
-                        },
-                    }}
-                />
+                <SiteTextsProvider>
+                    <AppRoutes />
+                    <CookieConsent />
+                    <Toaster
+                        position="top-right"
+                        richColors
+                        closeButton
+                        toastOptions={{
+                            classNames: {
+                                toast: "font-sans",
+                            },
+                        }}
+                    />
+                </SiteTextsProvider>
             </AuthProvider>
         </BrowserRouter>
     );

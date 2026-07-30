@@ -13,6 +13,7 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+import { useSiteText } from "@/context/SiteTextsContext";
 import PublicFooter from "@/components/PublicFooter";
 import PublicHeader from "@/components/PublicHeader";
 import { styleFor } from "@/components/StyleControls";
@@ -371,7 +372,7 @@ export default function Landing() {
             {!loading && sections.length === 0 && (
                 <div className="max-w-3xl mx-auto px-6 py-20 text-center">
                     <p className="label-caps mb-3">Startsida</p>
-                    <h1 className="text-3xl font-display font-bold">Välkommen till Fågelregister</h1>
+                    <h1 className="text-3xl font-display font-bold">{welcomeTitle}</h1>
                     <p className="text-muted-foreground mt-3">
                         Startsidan konfigureras av admin. Kika förbi{" "}
                         <Link to="/galleri" className="text-primary underline-offset-2 hover:underline">galleriet</Link>{" "}

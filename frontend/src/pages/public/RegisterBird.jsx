@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import PublicFooter from "@/components/PublicFooter";
 import SpeciesSelect from "@/components/SpeciesSelect";
 import BackHeader from "@/components/BackHeader";
+import { useSiteText } from "@/context/SiteTextsContext";
 import {
     Dialog,
     DialogContent,
