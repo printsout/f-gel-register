@@ -13,6 +13,7 @@ import {
     ImageSquare,
     Bird as BirdIcon,
     ShieldCheck,
+    SignOut,
 } from "@phosphor-icons/react";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -368,7 +369,7 @@ function PostRow({ post, onDelete }) {
 }
 
 export default function MyPosts() {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading, logout } = useAuth();
     const [birds, setBirds] = useState([]);
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -419,14 +420,14 @@ export default function MyPosts() {
 
     return (
         <div className="min-h-screen bg-background">
-            <BackHeader label="Mina inlägg" />
+            <BackHeader label="Mina sidor" />
 
             <div className="max-w-5xl mx-auto px-6 py-10">
                 <div className="mb-8 flex flex-wrap justify-between items-end gap-4">
                     <div>
                         <p className="label-caps mb-2">Din community-profil</p>
                         <h1 className="text-3xl md:text-4xl font-display font-bold">
-                            Mina inlägg
+                            Mina sidor
                         </h1>
                         <p className="text-muted-foreground mt-1">
                             {posts.length} inlägg · {approved} publicerade · {pending} väntar granskning
@@ -453,6 +454,16 @@ export default function MyPosts() {
                             data-testid="button-new-post"
                         >
                             <PlusCircle size={16} className="mr-2" /> Nytt inlägg
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={async () => {
+                                await logout();
+                                navigate("/");
+                            }}
+                            data-testid="button-logout"
+                        >
+                            <SignOut size={16} className="mr-2" /> Logga ut
                         </Button>
                     </div>
                 </div>

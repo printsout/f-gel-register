@@ -127,7 +127,7 @@ export default function PublicHeader() {
                         <>
                             <Link to="/mina-faglar">
                                 <Button size="sm" variant="outline" data-testid="button-my-birds">
-                                    Mina inlägg
+                                    Mina sidor
                                 </Button>
                             </Link>
                             {isAdmin && (
