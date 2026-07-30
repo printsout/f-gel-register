@@ -6,23 +6,42 @@ export const API = `${BACKEND_URL}/api`;
 const ACCESS_KEY = "auth_access_token";
 const REFRESH_KEY = "auth_refresh_token";
 
+// NOTE: localStorage token storage is a deliberate workaround for third-party
+// cookie blocking on Railway's cross-site subdomains (Safari ITP + Chrome 3P).
+// See handoff summary "Issue 4". The XSS surface is mitigated by DOMPurify
+// sanitising all admin-rendered HTML (StyleControls.jsx). Migrating back to
+// HttpOnly first-party cookies requires a single-registrable-domain deploy.
 export function getAccessToken() {
-    try { return localStorage.getItem(ACCESS_KEY); } catch (_) { return null; }
+    try {
+        return localStorage.getItem(ACCESS_KEY);
+    } catch (err) {
+        console.debug("[api] getAccessToken failed:", err);
+        return null;
+    }
 }
 export function getRefreshToken() {
-    try { return localStorage.getItem(REFRESH_KEY); } catch (_) { return null; }
+    try {
+        return localStorage.getItem(REFRESH_KEY);
+    } catch (err) {
+        console.debug("[api] getRefreshToken failed:", err);
+        return null;
+    }
 }
 export function setAuthTokens(access, refresh) {
     try {
         if (access) localStorage.setItem(ACCESS_KEY, access);
         if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
-    } catch (_) { /* ignore */ }
+    } catch (err) {
+        console.debug("[api] setAuthTokens failed (storage disabled?):", err);
+    }
 }
 export function clearAuthTokens() {
     try {
         localStorage.removeItem(ACCESS_KEY);
         localStorage.removeItem(REFRESH_KEY);
-    } catch (_) { /* ignore */ }
+    } catch (err) {
+        console.debug("[api] clearAuthTokens failed:", err);
+    }
 }
 
 const api = axios.create({
@@ -82,7 +101,9 @@ api.interceptors.response.use(
                         original.headers.Authorization = `Bearer ${data.access_token}`;
                         return api(original);
                     }
-                } catch (_) { /* fall-through */ }
+                } catch (refreshErr) {
+                    console.debug("[api] silent refresh failed:", refreshErr);
+                }
             }
         }
         return Promise.reject(error);

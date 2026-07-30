@@ -163,7 +163,6 @@ export default function AdminMenu() {
     };
     useEffect(() => {
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Group into tree
@@ -275,8 +274,19 @@ export default function AdminMenu() {
         }
     };
 
-    // Available parent options (only top-level items that don't have parent themselves)
-    const topLevelOptions = items.filter((i) => !i.parent_id);
+    // Available parent options (only top-level items that don't have parent themselves).
+    // Memoised so referential equality is stable across renders — avoids remounting
+    // the SelectItem list when unrelated state changes.
+    const topLevelOptions = useMemo(
+        () => items.filter((i) => !i.parent_id),
+        [items],
+    );
+
+    // Options usable in the Select (excludes the item currently being edited).
+    const parentSelectOptions = useMemo(
+        () => topLevelOptions.filter((t) => t.id !== form.id),
+        [topLevelOptions, form.id],
+    );
 
     return (
         <AdminLayout>
@@ -414,13 +424,11 @@ export default function AdminMenu() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="none">Huvudmeny (top-nivå)</SelectItem>
-                                    {topLevelOptions
-                                        .filter((t) => t.id !== form.id)
-                                        .map((t) => (
-                                            <SelectItem key={t.id} value={t.id}>
-                                                Under: {t.label}
-                                            </SelectItem>
-                                        ))}
+                                    {parentSelectOptions.map((t) => (
+                                        <SelectItem key={t.id} value={t.id}>
+                                            Under: {t.label}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                             {form.has_children && (

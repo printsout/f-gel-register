@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
     MagnifyingGlass,
@@ -62,7 +62,7 @@ export default function Users() {
     const [loading, setLoading] = useState(true);
     const bulk = useBulkSelection(items, (u) => u.user_id);
 
-    const load = async () => {
+    const load = useCallback(async () => {
         setLoading(true);
         try {
             const params = {};
@@ -77,11 +77,11 @@ export default function Users() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [q, role, blocked, bulk]);
     useEffect(() => {
         const t = setTimeout(load, 200);
         return () => clearTimeout(t);
-    }, [q, role, blocked]);
+    }, [load]);
 
     const openDetail = async (u) => {
         try {

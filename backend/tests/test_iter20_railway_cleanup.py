@@ -198,8 +198,16 @@ def test_cleanup_created_user():
         for line in f:
             if line.startswith("DB_NAME="):
                 db_name = line.split("=", 1)[1].strip()
-    cmd = f'mongosh --quiet {db_name} --eval \'db.users.deleteOne({{email: "{_created_email}"}}); db.site_texts.deleteMany({{key: /^TEST_iter20_/}})\''
+    # SECURITY: use list-form to avoid shell injection from db_name / _created_email.
+    eval_script = (
+        f'db.users.deleteOne({{email: "{_created_email}"}}); '
+        'db.site_texts.deleteMany({key: /^TEST_iter20_/})'
+    )
     try:
-        subprocess.run(cmd, shell=True, timeout=10, check=False)
+        subprocess.run(
+            ["mongosh", "--quiet", db_name, "--eval", eval_script],
+            timeout=10,
+            check=False,
+        )
     except Exception:
         pass

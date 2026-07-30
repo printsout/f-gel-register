@@ -110,7 +110,7 @@ function PostCard({ post, onApprove, onReject, onDelete, selected, onToggleSelec
             {post.image_urls?.length > 0 && (
                 <div className="grid grid-cols-4 gap-2 mb-3">
                     {post.image_urls.map((src, i) => (
-                        <a key={i} href={src} target="_blank" rel="noreferrer">
+                        <a key={`${src}-${i}`} href={src} target="_blank" rel="noreferrer">
                             <img
                                 src={src}
                                 alt=""

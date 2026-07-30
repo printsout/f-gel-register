@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
     MagnifyingGlass,
@@ -85,7 +85,7 @@ export default function RegisteredBirds() {
     const [confirmDelete, setConfirmDelete] = useState(null);
     const bulk = useBulkSelection(items);
 
-    const load = async () => {
+    const load = useCallback(async () => {
         setLoading(true);
         try {
             const params = {};
@@ -99,12 +99,12 @@ export default function RegisteredBirds() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [q, status, bulk]);
 
     useEffect(() => {
         const t = setTimeout(load, 200);
         return () => clearTimeout(t);
-    }, [q, status]);
+    }, [load]);
 
     const doDelete = async () => {
         try {

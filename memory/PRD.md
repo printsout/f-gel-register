@@ -137,6 +137,17 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - test@papegojregistret.se / Test123! (user, with 5 sample birds)
 - Seeded discount code: `PARROTS15` (15% off, type=percent)
 
+## Iteration 13 (2026-02): Kodgranskningsfixar
+- ✅ **XSS-skydd:** `RichTextEditor` i `StyleControls.jsx` sanerar nu allt HTML-innehåll via DOMPurify (ALLOWED_TAGS: b/i/u/em/strong/a/ul/ol/li/p/br/span/div; skript, iframes, on*-handlers blockeras). Både init-load, input och blur går genom sanitizer.
+- ✅ **Shell-injection:** `tests/test_iter20_railway_cleanup.py` använder nu `subprocess.run(['mongosh', ...])` list-form istället för `shell=True`.
+- ✅ **Tysta catch-block:** api.js, AuthContext.jsx, SiteTextsContext.jsx loggar nu med `console.debug` istället för silent `catch (_)`.
+- ✅ **Hook-deps:** Users.jsx och RegisteredBirds.jsx wrappar `load` i `useCallback` med korrekta beroenden; Homepage.jsx flaggar sina medvetna `[]`-effekter tydligt.
+- ✅ **Stabila keys:** Posts.jsx (bildindex → `${src}-${i}`), Dashboard.jsx (skelett → `kpi-skeleton-${i}`), Homepage.jsx (feature-items → `it._cid || feature-${idx}`).
+- ✅ **useMemo:** Menu.jsx memo:ar `topLevelOptions` och `parentSelectOptions`; Homepage.jsx bryter ut `activeDiscountCodes` från JSX.
+- ✅ **Dokumenterat medvetet val:** localStorage-tokenlagring har en tydlig kommentar i `api.js` som förklarar att det är en workaround för Railway cross-site-cookies, mitigerat via DOMPurify. Migrering till HttpOnly cookies kräver single-registrable-domain deploy.
+- ⏳ **Stora refaktoreringar** (splittning av `server.py`-funktioner: `create_registered_bird`, `startup`, `_activate_payment_for_session`; splittning av 400-radiga admin-komponenter) — parkerat till egen iteration, för riskabelt att göra i samma pass som säkerhetsfixarna.
+- ✅ **Tester:** 11/11 pytest passing i test_iter20_railway_cleanup, lint clean på alla ändrade filer, screenshot-verifierat att landning + kontakt renderar.
+
 ## Iteration 12 (2026-02): SiteTexts fullständig koppling
 - ✅ `SiteTextsContext` – global provider som hämtar `/api/site-texts` en gång vid mount, exponerar `useSiteText(key, fallback)` och `useSiteTexts()`. Uppdaterar även `document.title` när admin ändrar `site.title`.
 - ✅ Adminvyn `/admin/texter` uppgraderad med 10 grupper (Global header/footer, Startsida-fallback, Login/registrera konto, Kontakt, Registrera fågel, Rapportera hittad/saknad, Hittade fåglar, Ägarbyte, Mina sidor, Admin) + 43 fördefinierade nycklar med tydliga labels och fallback. Egna nycklar kan läggas till och listas separat.

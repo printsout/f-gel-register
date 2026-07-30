@@ -19,7 +19,10 @@ export function AuthProvider({ children }) {
             const { data } = await api.get("/auth/me");
             setUser(data);
             return data;
-        } catch (e) {
+        } catch (err) {
+            // Expected for anonymous visitors — log at debug level so real
+            // integration failures still show up in dev tools.
+            console.debug("[auth] /auth/me failed:", err?.response?.status || err?.message);
             setUser(false);
             return null;
         }
@@ -53,8 +56,8 @@ export function AuthProvider({ children }) {
     const logout = async () => {
         try {
             await api.post("/auth/logout");
-        } catch (_) {
-            /* ignore — clear local state anyway */
+        } catch (err) {
+            console.debug("[auth] /auth/logout failed (clearing local state anyway):", err?.message);
         }
         clearAuthTokens();
         setUser(false);

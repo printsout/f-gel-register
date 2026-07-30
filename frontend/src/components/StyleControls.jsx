@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -180,19 +181,37 @@ export function styleFor(style, kind) {
  * Stores an HTML string in `value`. Fires `onChange(html)` on input.
  * Not a full-blown editor — enough for admin CMS use (B/I/U/link/list).
  */
+// DOMPurify config: allow only inline formatting tags admins actually use.
+// Blocks <script>, <iframe>, on* handlers, javascript: URLs by default.
+const SANITIZE_CONFIG = {
+    ALLOWED_TAGS: ["b", "i", "u", "em", "strong", "a", "ul", "ol", "li", "p", "br", "span", "div"],
+    ALLOWED_ATTR: ["href", "target", "rel", "style"],
+    ALLOW_DATA_ATTR: false,
+};
+
+const sanitizeHtml = (html) => DOMPurify.sanitize(html || "", SANITIZE_CONFIG);
+
 export function RichTextEditor({ value, onChange, placeholder, testid }) {
     const ref = useRef(null);
     // Only push external value into DOM if it truly changed to avoid caret jump on every keystroke.
+    // Value is sanitized with DOMPurify to prevent XSS from previously-stored malicious HTML.
     useEffect(() => {
-        if (ref.current && (value || "") !== ref.current.innerHTML) {
-            ref.current.innerHTML = value || "";
+        if (ref.current) {
+            const clean = sanitizeHtml(value);
+            if (clean !== ref.current.innerHTML) {
+                ref.current.innerHTML = clean;
+            }
         }
     }, [value]);
+
+    const emit = () => {
+        if (ref.current) onChange(sanitizeHtml(ref.current.innerHTML));
+    };
 
     const exec = (cmd, arg) => {
         ref.current?.focus();
         document.execCommand(cmd, false, arg);
-        if (ref.current) onChange(ref.current.innerHTML);
+        emit();
     };
 
     const promptLink = () => {

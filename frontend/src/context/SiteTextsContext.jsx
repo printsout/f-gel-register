@@ -19,8 +19,9 @@ export function SiteTextsProvider({ children }) {
         try {
             const { data } = await api.get("/site-texts");
             setTexts(data || {});
-        } catch (_) {
-            /* keep existing texts (or empty) */
+        } catch (err) {
+            // Non-critical: fall back to hard-coded texts. Log for observability.
+            console.debug("[site-texts] refresh failed, using fallbacks:", err?.message);
         }
     }, []);
 

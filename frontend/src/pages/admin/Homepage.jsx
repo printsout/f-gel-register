@@ -232,6 +232,11 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                     ? `${d.discount_amount} kr`
                     : `${d.discount_percentage}%`;
             };
+            // Extracted from JSX to keep the render tree readable and to avoid
+            // repeated .filter() cost if this block gets remounted often.
+            const activeDiscountCodes = (window.__discountCodes || []).filter(
+                (d) => d.is_active,
+            );
             return (
                 <div className="space-y-4">
                     <TextField label="Förrubrik (eyebrow)" value={c.eyebrow} onChange={(v) => patchConfig({ eyebrow: v })} placeholder="Personliga produkter" testid="config-eyebrow" />
@@ -291,19 +296,14 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                                             <SelectItem value="__none">
                                                 Ingen (manuellt värde)
                                             </SelectItem>
-                                            {(window.__discountCodes || [])
-                                                .filter((d) => d.is_active)
-                                                .map((d) => (
-                                                    <SelectItem
-                                                        key={d.id}
-                                                        value={d.id}
-                                                    >
-                                                        {d.code} — {formatCodeLabel(d)}{" "}
-                                                        {d.usage_limit
-                                                            ? `(${d.used_count}/${d.usage_limit})`
-                                                            : ""}
-                                                    </SelectItem>
-                                                ))}
+                                            {activeDiscountCodes.map((d) => (
+                                                <SelectItem key={d.id} value={d.id}>
+                                                    {d.code} — {formatCodeLabel(d)}{" "}
+                                                    {d.usage_limit
+                                                        ? `(${d.used_count}/${d.usage_limit})`
+                                                        : ""}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                     {linkedCode && (
@@ -487,7 +487,7 @@ function ConfigField({ section, updateConfig, patchConfig }) {
                 <div className="space-y-4">
                     <p className="label-caps">Kort ({items.length})</p>
                     {items.map((it, idx) => (
-                        <div key={idx} className="rounded-md border border-border p-3 space-y-2" data-testid={`feature-item-${idx}`}>
+                        <div key={it._cid || `feature-${idx}`} className="rounded-md border border-border p-3 space-y-2" data-testid={`feature-item-${idx}`}>
                             <div className="flex items-center justify-between">
                                 <span className="text-xs font-mono text-muted-foreground">#{idx + 1}</span>
                                 <Button
@@ -599,15 +599,22 @@ export default function AdminHomepage() {
     // Load discount codes into a window-scoped cache so the Hero config editor can
     // populate its 'Rabattkod' dropdown without prop-drilling deep into ConfigField.
     useEffect(() => {
+        let cancelled = false;
         api.get("/admin/discount-codes")
             .then(({ data }) => {
-                window.__discountCodes = data;
+                if (!cancelled) window.__discountCodes = data;
             })
-            .catch(() => {
-                window.__discountCodes = [];
+            .catch((err) => {
+                console.debug("[homepage] discount-codes load failed:", err?.message);
+                if (!cancelled) window.__discountCodes = [];
             });
+        return () => {
+            cancelled = true;
+        };
     }, []);
     useEffect(() => {
+        // Initial load runs once on mount. `load` is stable per render (not
+        // memoised) but we don't want to rerun it as unrelated state changes.
         load();
     }, []);
 
