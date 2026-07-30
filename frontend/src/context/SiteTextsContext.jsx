@@ -7,7 +7,10 @@ import {
 } from "react";
 import api from "@/lib/api";
 
-const SiteTextsContext = createContext({ texts: {}, refresh: () => {} });
+const SiteTextsContext = createContext({
+    texts: {},
+    refresh: () => {},
+});
 
 export function SiteTextsProvider({ children }) {
     const [texts, setTexts] = useState({});
@@ -25,6 +28,14 @@ export function SiteTextsProvider({ children }) {
         refresh();
     }, [refresh]);
 
+    // Keep the browser tab title in sync with the admin-editable site.title
+    useEffect(() => {
+        const t = texts["site.title"];
+        if (t && String(t).trim().length > 0) {
+            document.title = String(t);
+        }
+    }, [texts]);
+
     return (
         <SiteTextsContext.Provider value={{ texts, refresh }}>
             {children}
@@ -41,6 +52,11 @@ export function useSiteText(key, fallback = "") {
     const stored = ctx?.texts?.[key];
     if (stored && String(stored).trim().length > 0) return stored;
     return fallback;
+}
+
+/** useSiteTexts – full context accessor (used by the admin editor). */
+export function useSiteTexts() {
+    return useContext(SiteTextsContext);
 }
 
 export default SiteTextsContext;

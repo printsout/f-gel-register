@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Feather, EnvelopeSimple, LockKey, GoogleLogo, ArrowRight } from "@phosphor-icons/react";
+import { EnvelopeSimple, LockKey, GoogleLogo, ArrowRight } from "@phosphor-icons/react";
 import { useAuth } from "@/context/AuthContext";
-import api, { formatApiError } from "@/lib/api";
+import { formatApiError } from "@/lib/api";
+import { useSiteText } from "@/context/SiteTextsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,24 @@ export default function Login() {
     });
     const [needsTotp, setNeedsTotp] = useState(false);
     const [busy, setBusy] = useState(false);
+
+    const eyebrowText = useSiteText("login.eyebrow", "Adminportal");
+    const loginTitle = useSiteText("login.title", "Välkommen tillbaka");
+    const registerTitle = useSiteText("login.register_title", "Skapa konto");
+    const loginSubtitle = useSiteText("login.subtitle", "Logga in för att hantera registret.");
+    const registerSubtitle = useSiteText("login.register_subtitle", "Fyll i dina uppgifter för att komma igång.");
+    const googleButton = useSiteText("login.google_button", "Fortsätt med Google");
+    const dividerText = useSiteText("login.divider", "eller");
+    const forgotText = useSiteText("login.forgot_password", "Glömt lösenord?");
+    const submitLogin = useSiteText("login.submit_login", "Logga in");
+    const submitRegister = useSiteText("login.submit_register", "Skapa konto");
+    const heroEyebrow = useSiteText("login.hero.eyebrow", "Sveriges papegojregister");
+    const heroTitle = useSiteText("login.hero.title", "Håll registret levande — och våra fåglar säkra.");
+    const heroSubtitle = useSiteText(
+        "login.hero.subtitle",
+        "Från ringnummer till återförening. Ett verktyg för ägare och volontärer runt om i landet.",
+    );
+    const copyright = useSiteText("footer.copyright", `© ${new Date().getFullYear()} Fågelregister`);
 
     useEffect(() => {
         if (user && user.role) {
@@ -74,14 +93,12 @@ export default function Login() {
                 </Link>
 
                 <div className="max-w-md w-full mx-auto flex-1 flex flex-col justify-center py-10">
-                    <p className="label-caps mb-3">Admin­portal</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight mb-2">
-                        {mode === "login" ? "Välkommen tillbaka" : "Skapa konto"}
+                    <p className="label-caps mb-3">{eyebrowText}</p>
+                    <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tight mb-2" data-testid="login-title">
+                        {mode === "login" ? loginTitle : registerTitle}
                     </h1>
-                    <p className="text-muted-foreground mb-8">
-                        {mode === "login"
-                            ? "Logga in för att hantera registret."
-                            : "Fyll i dina uppgifter för att komma igång."}
+                    <p className="text-muted-foreground mb-8" data-testid="login-subtitle">
+                        {mode === "login" ? loginSubtitle : registerSubtitle}
                     </p>
 
                     <Button
@@ -92,13 +109,13 @@ export default function Login() {
                         data-testid="button-google-login"
                     >
                         <GoogleLogo size={20} weight="bold" className="mr-2" />
-                        Fortsätt med Google
+                        {googleButton}
                     </Button>
 
                     <div className="flex items-center gap-3 mb-6">
                         <div className="flex-1 h-px bg-border" />
                         <span className="text-xs uppercase tracking-widest text-muted-foreground">
-                            eller
+                            {dividerText}
                         </span>
                         <div className="flex-1 h-px bg-border" />
                     </div>
@@ -194,7 +211,7 @@ export default function Login() {
                                         className="text-xs text-muted-foreground hover:text-primary"
                                         data-testid="link-forgot-password"
                                     >
-                                        Glömt lösenord?
+                                        {forgotText}
                                     </Link>
                                 </div>
                             )}
@@ -229,11 +246,7 @@ export default function Login() {
                             className="w-full h-11 bg-primary hover:bg-primary/90"
                             data-testid="button-submit-auth"
                         >
-                            {busy
-                                ? "Vänta…"
-                                : mode === "login"
-                                  ? "Logga in"
-                                  : "Skapa konto"}
+                            {busy ? "Vänta…" : mode === "login" ? submitLogin : submitRegister}
                             <ArrowRight size={18} className="ml-2" />
                         </Button>
                     </form>
@@ -273,9 +286,7 @@ export default function Login() {
                     </Link>
                 </div>
 
-                <p className="text-xs text-muted-foreground">
-                    © {new Date().getFullYear()} Fågelregister
-                </p>
+                <p className="text-xs text-muted-foreground">{copyright}</p>
             </div>
 
             {/* Right – image */}
@@ -290,16 +301,11 @@ export default function Login() {
             >
                 <div className="absolute inset-0 bg-black/40" />
                 <div className="absolute inset-0 flex flex-col justify-end p-12 text-white">
-                    <p className="label-caps text-white/70 mb-2">
-                        Sveriges papegojregister
-                    </p>
+                    <p className="label-caps text-white/70 mb-2">{heroEyebrow}</p>
                     <h2 className="text-3xl md:text-4xl font-display font-bold tracking-tight max-w-md">
-                        Håll registret levande — och våra fåglar säkra.
+                        {heroTitle}
                     </h2>
-                    <p className="text-white/80 mt-4 max-w-md">
-                        Från ringnummer till återförening. Ett verktyg för ägare
-                        och volontärer runt om i landet.
-                    </p>
+                    <p className="text-white/80 mt-4 max-w-md">{heroSubtitle}</p>
                 </div>
             </div>
         </div>

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import PublicFooter from "@/components/PublicFooter";
 import BackHeader from "@/components/BackHeader";
+import { useSiteText } from "@/context/SiteTextsContext";
 
 const EMPTY = {
     bird_id: "",
@@ -38,6 +39,12 @@ export default function OwnershipTransfer() {
     const [form, setForm] = useState(EMPTY);
     const [busy, setBusy] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+
+    const transferTitle = useSiteText("transfer.title", "Ägarbyte");
+    const transferSubtitle = useSiteText(
+        "transfer.subtitle",
+        "Fyll i uppgifter för både dig och den nya ägaren. Vi granskar begäran och kontaktar dig vid eventuella frågor.",
+    );
 
     useEffect(() => {
         if (user === null) return; // still loading auth context
@@ -122,12 +129,11 @@ export default function OwnershipTransfer() {
                         <ArrowsClockwise size={28} weight="duotone" className="text-primary" />
                     </div>
                     <div>
-                        <h1 className="font-display text-3xl md:text-4xl font-bold">
-                            Ägarbyte
+                        <h1 className="font-display text-3xl md:text-4xl font-bold" data-testid="transfer-title">
+                            {transferTitle}
                         </h1>
-                        <p className="text-muted-foreground mt-1">
-                            Fyll i uppgifter för både dig och den nya ägaren. Vi granskar
-                            begäran och kontaktar dig vid eventuella frågor.
+                        <p className="text-muted-foreground mt-1" data-testid="transfer-subtitle">
+                            {transferSubtitle}
                         </p>
                     </div>
                 </div>

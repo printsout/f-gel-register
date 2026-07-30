@@ -29,6 +29,15 @@ export default function RegisterBird() {
     const [searchParams] = useSearchParams();
     const [busy, setBusy] = useState(false);
     const [successData, setSuccessData] = useState(null);
+
+    const registerTitle = useSiteText("register.title", "Registrera din papegoja");
+    const registerSubtitle = useSiteText("register.subtitle", "Fyll i uppgifter så din fågel finns i registret.");
+    const registerSubmit = useSiteText("register.submit_button", "Registrera & gå till kassan");
+    const registerTerms = useSiteText(
+        "register.terms_text",
+        "Jag accepterar registreringsvillkor och att uppgifterna lagras enligt GDPR.",
+    );
+
     const [form, setForm] = useState({
         species: "",
         ring_number: "",
@@ -204,11 +213,11 @@ export default function RegisterBird() {
                         <Bird size={26} weight="duotone" className="text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-display font-bold">
-                            Registrera din papegoja
+                        <h1 className="text-2xl md:text-3xl font-display font-bold" data-testid="register-title">
+                            {registerTitle}
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Fyll i uppgifter så din fågel finns i registret.
+                        <p className="text-sm text-muted-foreground mt-1" data-testid="register-subtitle">
+                            {registerSubtitle}
                         </p>
                     </div>
                 </div>
@@ -444,10 +453,9 @@ export default function RegisterBird() {
                             }
                             data-testid="checkbox-accept"
                         />
-                        <span className="text-sm text-muted-foreground">
-                            Jag accepterar registreringsvillkor och att uppgifterna
-                            lagras enligt GDPR. Registreringsavgift 300 kr,
-                            årsavgift 100 kr.
+                        <span className="text-sm text-muted-foreground" data-testid="register-terms-text">
+                            {registerTerms}{" "}
+                            Registreringsavgift {priceInfo.base_registration} kr, årsavgift {priceInfo.base_membership} kr.
                         </span>
                     </label>
                     <Button
@@ -456,7 +464,7 @@ export default function RegisterBird() {
                         disabled={busy}
                         data-testid="button-submit-register-bird"
                     >
-                        {busy ? "Öppnar kassan…" : "Registrera & gå till kassan"}
+                        {busy ? "Öppnar kassan…" : registerSubmit}
                     </Button>
                 </form>
             </div>

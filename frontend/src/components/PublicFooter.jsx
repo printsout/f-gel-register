@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { EnvelopeSimple } from "@phosphor-icons/react";
 import api from "@/lib/api";
+import { useSiteText } from "@/context/SiteTextsContext";
 import { openCookieSettings } from "@/components/CookieConsent";
 
 export default function PublicFooter() {
@@ -39,7 +40,7 @@ export default function PublicFooter() {
                             className="inline-flex items-center gap-3 px-8 py-5 text-lg font-semibold rounded-xl bg-primary text-primary-foreground shadow-md hover:shadow-lg hover:opacity-90 transition-all"
                         >
                             <EnvelopeSimple size={24} weight="duotone" />
-                            Kontakta oss
+                            {useSiteText("footer.contact_cta", "Kontakta oss")}
                         </Link>
                     </div>
 
@@ -64,8 +65,8 @@ export default function PublicFooter() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
-                    <p className="text-xs text-muted-foreground">
-                        © {new Date().getFullYear()} Fågelregister
+                    <p className="text-xs text-muted-foreground" data-testid="footer-copyright">
+                        {useSiteText("footer.copyright", `© ${new Date().getFullYear()} Fågelregister`)}
                     </p>
                     <div className="flex gap-4 text-xs text-muted-foreground items-center">
                         <a href="mailto:info@fagelregister.se">

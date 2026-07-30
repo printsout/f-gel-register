@@ -351,6 +351,12 @@ export default function Landing() {
     const { user, isAdmin } = useAuth();
     const [sections, setSections] = useState([]);
     const [loading, setLoading] = useState(true);
+    const fallbackEyebrow = useSiteText("landing.fallback.eyebrow", "Startsida");
+    const fallbackTitle = useSiteText("landing.fallback.title", "Välkommen till Fågelregister");
+    const fallbackBody = useSiteText(
+        "landing.fallback.body",
+        "Startsidan konfigureras av admin. Kika förbi galleriet i mellantiden.",
+    );
 
     useEffect(() => {
         api.get("/homepage")
@@ -371,12 +377,11 @@ export default function Landing() {
 
             {!loading && sections.length === 0 && (
                 <div className="max-w-3xl mx-auto px-6 py-20 text-center">
-                    <p className="label-caps mb-3">Startsida</p>
-                    <h1 className="text-3xl font-display font-bold">{welcomeTitle}</h1>
+                    <p className="label-caps mb-3">{fallbackEyebrow}</p>
+                    <h1 className="text-3xl font-display font-bold" data-testid="landing-fallback-title">{fallbackTitle}</h1>
                     <p className="text-muted-foreground mt-3">
-                        Startsidan konfigureras av admin. Kika förbi{" "}
-                        <Link to="/galleri" className="text-primary underline-offset-2 hover:underline">galleriet</Link>{" "}
-                        i mellantiden.
+                        {fallbackBody}{" "}
+                        <Link to="/galleri" className="text-primary underline-offset-2 hover:underline">galleriet</Link>
                     </p>
                 </div>
             )}

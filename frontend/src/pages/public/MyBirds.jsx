@@ -378,6 +378,9 @@ export default function MyPosts() {
     const [confirmDelete, setConfirmDelete] = useState(null);
     const navigate = useNavigate();
 
+    const mybirdsEyebrow = useSiteText("mybirds.eyebrow", "Din community-profil");
+    const mybirdsTitle = useSiteText("mybirds.title", "Mina sidor");
+
     const load = async () => {
         setLoading(true);
         try {
@@ -426,9 +429,9 @@ export default function MyPosts() {
             <div className="max-w-5xl mx-auto px-6 py-10">
                 <div className="mb-8 flex flex-wrap justify-between items-end gap-4">
                     <div>
-                        <p className="label-caps mb-2">Din community-profil</p>
-                        <h1 className="text-3xl md:text-4xl font-display font-bold">
-                            Mina sidor
+                        <p className="label-caps mb-2">{mybirdsEyebrow}</p>
+                        <h1 className="text-3xl md:text-4xl font-display font-bold" data-testid="mybirds-title">
+                            {mybirdsTitle}
                         </h1>
                         <p className="text-muted-foreground mt-1">
                             {posts.length} inlägg · {approved} publicerade · {pending} väntar granskning

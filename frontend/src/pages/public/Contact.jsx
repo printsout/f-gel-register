@@ -65,11 +65,11 @@ export default function Contact() {
                         <div className="min-w-0">
                             <p className="label-caps text-xs">E-post</p>
                             <a
-                                href="mailto:info@fagelregister.se"
+                                href={`mailto:${useSiteText("contact.email_value", "info@fagelregister.se")}`}
                                 className="text-sm hover:underline break-all"
                                 data-testid="contact-email-link"
                             >
-                                info@fagelregister.se
+                                {useSiteText("contact.email_value", "info@fagelregister.se")}
                             </a>
                         </div>
                     </div>
@@ -83,11 +83,11 @@ export default function Contact() {
                         <div className="min-w-0">
                             <p className="label-caps text-xs">Telefon</p>
                             <a
-                                href="tel:0768488091"
+                                href={`tel:${useSiteText("contact.phone_value", "0768 48 80 91").replace(/\s+/g, "")}`}
                                 className="text-sm hover:underline"
                                 data-testid="contact-phone-link"
                             >
-                                0768 48 80 91
+                                {useSiteText("contact.phone_value", "0768 48 80 91")}
                             </a>
                         </div>
                     </div>
@@ -104,7 +104,7 @@ export default function Contact() {
                         </div>
                         <div className="min-w-0">
                             <p className="label-caps text-xs">Svarstid</p>
-                            <p className="text-sm">1–2 vardagar</p>
+                            <p className="text-sm">{useSiteText("contact.response_time", "1–2 vardagar")}</p>
                         </div>
                     </div>
                 </div>

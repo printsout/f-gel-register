@@ -9,6 +9,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/context/AuthContext";
+import { useSiteText } from "@/context/SiteTextsContext";
 import api from "@/lib/api";
 
 function TopLink({ item }) {
@@ -76,6 +77,9 @@ function TopWithDropdown({ item }) {
 export default function PublicHeader() {
     const { user, isAdmin } = useAuth();
     const [menu, setMenu] = useState([]);
+    const myPagesLabel = useSiteText("header.nav.my_pages", "Mina sidor");
+    const adminLabel = useSiteText("header.nav.admin", "Admin");
+    const loginLabel = useSiteText("header.nav.login", "Logga in");
 
     useEffect(() => {
         api.get("/menu")
@@ -127,19 +131,21 @@ export default function PublicHeader() {
                         <>
                             <Link to="/mina-faglar">
                                 <Button size="sm" variant="outline" data-testid="button-my-birds">
-                                    Mina sidor
+                                    {myPagesLabel}
                                 </Button>
                             </Link>
                             {isAdmin && (
                                 <Link to="/admin">
-                                    <Button size="sm" data-testid="button-goto-admin">Admin</Button>
+                                    <Button size="sm" data-testid="button-goto-admin">
+                                        {adminLabel}
+                                    </Button>
                                 </Link>
                             )}
                         </>
                     ) : (
                         <Link to="/login">
                             <Button size="sm" variant="outline" data-testid="button-login-nav">
-                                <SignIn size={16} className="mr-1.5" /> Logga in
+                                <SignIn size={16} className="mr-1.5" /> {loginLabel}
                             </Button>
                         </Link>
                     )}

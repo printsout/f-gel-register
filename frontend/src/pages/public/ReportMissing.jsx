@@ -23,6 +23,7 @@ import {
 import PublicFooter from "@/components/PublicFooter";
 import SpeciesSelect from "@/components/SpeciesSelect";
 import BackHeader from "@/components/BackHeader";
+import { useSiteText } from "@/context/SiteTextsContext";
 
 export default function ReportMissing() {
     const navigate = useNavigate();
@@ -74,13 +75,14 @@ export default function ReportMissing() {
                         />
                     </div>
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-display font-bold">
-                            Min papegoja har flugit iväg
+                        <h1 className="text-2xl md:text-3xl font-display font-bold" data-testid="report-missing-title">
+                            {useSiteText("report_missing.title", "Min papegoja har flugit iväg")}
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Rapportera din bortflögna fågel. Uppgifterna är
-                            <strong> privata</strong> och syns endast för admin — de
-                            kontaktar dig så fort fågeln hittas.
+                        <p className="text-sm text-muted-foreground mt-1" data-testid="report-missing-subtitle">
+                            {useSiteText(
+                                "report_missing.subtitle",
+                                "Rapportera din bortflögna fågel. Uppgifterna är privata och syns endast för admin — de kontaktar dig så fort fågeln hittas.",
+                            )}
                         </p>
                     </div>
                 </div>
@@ -94,10 +96,11 @@ export default function ReportMissing() {
                         weight="duotone"
                         className="text-primary flex-shrink-0 mt-0.5"
                     />
-                    <p className="text-xs text-muted-foreground">
-                        Denna rapport visas <strong>inte</strong> i galleriet eller på
-                        hittade-fåglar-sidan. Endast Fågelregisters administratörer
-                        ser dina uppgifter och kontaktar dig när något matchar.
+                    <p className="text-xs text-muted-foreground" data-testid="report-missing-privacy">
+                        {useSiteText(
+                            "report_missing.privacy_notice",
+                            "Denna rapport visas inte i galleriet eller på hittade-fåglar-sidan. Endast Fågelregisters administratörer ser dina uppgifter och kontaktar dig när något matchar.",
+                        )}
                     </p>
                 </div>
 

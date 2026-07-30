@@ -5,10 +5,17 @@ import api from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import PublicFooter from "@/components/PublicFooter";
 import BackHeader from "@/components/BackHeader";
+import { useSiteText } from "@/context/SiteTextsContext";
 
 export default function FoundBirdsList() {
     const [items, setItems] = useState([]);
     const [q, setQ] = useState("");
+    const foundTitle = useSiteText("found_list.title", "Hittade papegojor");
+    const foundSubtitle = useSiteText(
+        "found_list.subtitle",
+        "Rapporter från allmänheten. Har du sett din fågel? Ring upphittaren direkt.",
+    );
+    const foundEmpty = useSiteText("found_list.empty_state", "Inga rapporter hittades.");
 
     useEffect(() => {
         const t = setTimeout(async () => {
@@ -24,12 +31,11 @@ export default function FoundBirdsList() {
         <div className="min-h-screen bg-background">
             <BackHeader label="Hittade fåglar" />
             <div className="max-w-4xl mx-auto px-6 py-10">
-                <h1 className="text-3xl font-display font-bold">
-                    Hittade papegojor
+                <h1 className="text-3xl font-display font-bold" data-testid="found-list-title">
+                    {foundTitle}
                 </h1>
-                <p className="text-muted-foreground mt-1 mb-6">
-                    Rapporter från allmänheten. Har du sett din fågel? Ring
-                    upphittaren direkt.
+                <p className="text-muted-foreground mt-1 mb-6" data-testid="found-list-subtitle">
+                    {foundSubtitle}
                 </p>
 
                 <div className="relative mb-6">
@@ -47,8 +53,8 @@ export default function FoundBirdsList() {
                 </div>
 
                 {items.length === 0 ? (
-                    <div className="surface p-10 text-center text-muted-foreground">
-                        Inga rapporter hittades.
+                    <div className="surface p-10 text-center text-muted-foreground" data-testid="found-list-empty">
+                        {foundEmpty}
                     </div>
                 ) : (
                     <ul className="space-y-3">

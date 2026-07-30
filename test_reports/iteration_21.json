@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 21 – SiteTexts (admin editable UI strings), 2FA endpoints, and regression on public endpoints. Backend: 17/17 pytest passing (site-texts CRUD + auth/pub protection, 2FA setup→enable→disable using pyotp, regression on public-birds/found-birds/settings/prices/homepage/discount-codes). Frontend: /admin/texter loads with all groups (60+ keys), Save works, PublicHeader shows login/my-birds/admin correctly, Login/Register/ReportMissing/ReportFound/FoundBirdsList/Landing render their titles with proper data-testid. Contact page is MISSING the required data-testid attributes for title/subtitle (see bug below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Contact.jsx (/kontakt)",
+        "issue": "Missing data-testid=\"contact-title\" and data-testid=\"contact-subtitle\" on the H1 and paragraph rendered at lines 48-54. Text is also hard-coded (\"Hör av dig\" / static string) instead of using useSiteText('contact.title', 'Hör av dig') and useSiteText('contact.subtitle', ...). Admins therefore CANNOT override the Contact page title/subtitle from /admin/texter, contradicting the review request. Note: contact-email-link and contact-phone-link already do use useSiteText correctly.",
+        "selector": "[data-testid=\"contact-title\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter21_site_texts_2fa.py",
+    "/app/test_reports/pytest/iter21.xml"
+  ],
+  "action_items": [
+    "In /app/frontend/src/pages/public/Contact.jsx (lines ~48-54), wrap the H1 text with useSiteText('contact.title', 'Hör av dig') and add data-testid=\"contact-title\". Do the same for the subtitle paragraph with useSiteText('contact.subtitle', '<current default>') and data-testid=\"contact-subtitle\". This aligns Contact.jsx with the pattern already used on RegisterBird, ReportMissing, ReportFound, FoundBirdsList, OwnershipTransfer, MyBirds and Login."
+  ],
+  "critical_code_review_comments": [
+    "server.py is nearing 3830 lines — should be split into routers (auth, birds, admin, site_texts, 2fa) for maintainability.",
+    "PATCH /api/admin/site-texts/{key} does not validate the key against a known allowlist — any admin can create arbitrary keys that will pollute the public dict. Consider validating against SiteTexts.KNOWN_KEYS.",
+    "No DELETE endpoint on /admin/site-texts/{key}; currently the UI only supports setting a value to empty (fallback applies), but there's no way to truly remove a key from the collection. Minor, but worth documenting or adding.",
+    "SiteTextsContext fetches on mount only — after a PATCH from admin UI it relies on client-side refresh(). Public visitors won't see the change until they reload the tab. This is by design per the context note, but worth surfacing in UI copy so admins understand."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter21_site_texts_2fa.py"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "~90% – contact-title/subtitle testids missing"},
+  "test_credentials": "Admin: habib.nazary@hotmail.com / Jordgubbe234@u (TOTP disabled locally). User: test@papegojregistret.se / Test123!",
+  "seed_data_creation": "None. All test-created site_texts keys (contact.title, register.title, footer.copyright, header.nav.login) were deleted after tests. site_texts collection verified empty (0 docs) post-cleanup.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "site_texts collection is empty. Backend pytest suite for iter21 lives at /app/backend/tests/test_iter21_site_texts_2fa.py — safe to rerun anytime; it self-cleans. 2FA test enables then disables TOTP for test user, so the user stays with totp_enabled=false. If Contact.jsx is fixed, quick verify by: (1) admin PATCH contact.title, (2) visit /kontakt logged-out, (3) assert data-testid=contact-title matches. Existing pytest suite covers backend regression; no need to re-run full suite unless routes change.",
+  "rca of the issue": "Contact.jsx was never migrated to the useSiteText pattern for its H1/subtitle. The other public pages (RegisterBird, ReportMissing, ReportFound, FoundBirdsList, Landing, Login) were correctly wired up, but Contact was missed. Since the review explicitly names data-testid='contact-title' as required and expects admin edits to reflect on /kontakt, this counts as an incomplete implementation. Reproduction: navigate to /kontakt and query the DOM for [data-testid='contact-title'] — returns null. Fix: import { useSiteText } from '@/context/SiteTextsContext' (already imported), then replace the hard-coded H1 and P text with the hook + data-testid."
+}

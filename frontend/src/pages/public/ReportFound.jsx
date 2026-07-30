@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import PublicFooter from "@/components/PublicFooter";
 import BackHeader from "@/components/BackHeader";
+import { useSiteText } from "@/context/SiteTextsContext";
 
 export default function ReportFound() {
     const navigate = useNavigate();
@@ -48,11 +49,11 @@ export default function ReportFound() {
                         <MapPin size={24} weight="duotone" className="text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-2xl md:text-3xl font-display font-bold">
-                            Rapportera en hittad papegoja
+                        <h1 className="text-2xl md:text-3xl font-display font-bold" data-testid="report-found-title">
+                            {useSiteText("report_found.title", "Rapportera en hittad papegoja")}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Fri rapport – inget konto krävs.
+                        <p className="text-sm text-muted-foreground" data-testid="report-found-subtitle">
+                            {useSiteText("report_found.subtitle", "Fri rapport – inget konto krävs.")}
                         </p>
                     </div>
                 </div>
