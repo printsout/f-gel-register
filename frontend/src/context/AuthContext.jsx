@@ -5,7 +5,7 @@ import {
     useState,
     useCallback,
 } from "react";
-import api from "@/lib/api";
+import api, { clearAuthTokens } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
@@ -51,7 +51,10 @@ export function AuthProvider({ children }) {
     const logout = async () => {
         try {
             await api.post("/auth/logout");
-        } catch (_) {}
+        } catch (_) {
+            /* ignore — clear local state anyway */
+        }
+        clearAuthTokens();
         setUser(false);
     };
 

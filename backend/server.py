@@ -527,6 +527,8 @@ async def register(data: RegisterInput, request: Request, response: Response):
     set_auth_cookies(response, access, refresh)
     doc.pop("password_hash", None)
     doc.pop("_id", None)
+    doc["access_token"] = access
+    doc["refresh_token"] = refresh
     return doc
 
 
@@ -552,6 +554,8 @@ async def login(data: LoginInput, request: Request, response: Response):
     await log_activity(user["user_id"], email, "user.login", user["user_id"])
     user.pop("password_hash", None)
     user.pop("_id", None)
+    user["access_token"] = access
+    user["refresh_token"] = refresh
     return user
 
 
@@ -572,7 +576,18 @@ async def me(user: dict = Depends(get_current_user)):
 
 @api.post("/auth/refresh")
 async def refresh(request: Request, response: Response):
+    # Prefer cookie, fall back to Authorization: Bearer <refresh_token> or JSON body
     token = request.cookies.get("refresh_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        try:
+            body = await request.json()
+            token = (body or {}).get("refresh_token")
+        except Exception:  # noqa: BLE001
+            token = None
     if not token:
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
@@ -592,7 +607,7 @@ async def refresh(request: Request, response: Response):
         httponly=True, secure=True, samesite="none",
         max_age=60 * 60 * 2, path="/",
     )
-    return {"success": True}
+    return {"success": True, "access_token": access}
 
 
 @api.post("/auth/forgot-password")
