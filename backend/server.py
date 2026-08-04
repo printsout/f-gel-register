@@ -1118,6 +1118,12 @@ async def create_registered_bird(data: BirdInput, request: Request):
             account_created = True
             await log_activity(user_id, email, "user.auto_register", user_id, {"source": "bird_registration"})
 
+    # Fetch admin-configured prices once so both the DB record and discount
+    # calculation stay in sync with what admin has set in /admin/priser.
+    prices = await get_price_settings()
+    reg_fee = prices["registration_fee_kr"]
+    mem_fee = prices["membership_fee_kr"]
+
     discount_code_id: Optional[str] = None
     final_amount: Optional[float] = None
     if data.discount_code:
@@ -1125,11 +1131,11 @@ async def create_registered_bird(data: BirdInput, request: Request):
         if not validation["valid"]:
             raise HTTPException(status_code=400, detail=validation["message"])
         dc = validation["discount_code"]
-        original = 300.0
+        original = float(reg_fee)
         d_type = dc.get("discount_type") or ("percent" if dc.get("discount_percentage") else "amount")
         if d_type == "amount":
             # Fixed kr discount – applies to total (registration + membership when charged)
-            base = 300.0 + 100.0  # reg + membership base
+            base = float(reg_fee) + float(mem_fee)
             final_amount = round(max(0.0, base - float(dc.get("discount_amount") or 0)), 2)
         else:
             pct = int(dc.get("discount_percentage") or 0)
@@ -3359,7 +3365,12 @@ async def _build_bird_checkout_session(
     line_items = [{
         "price_data": {
             "currency": "sek",
-            "product_data": {"name": "Fågelregistrering"},
+            "product_data": {
+                "name": "Fågelregistrering",
+                # Stripe managed_payments (SMP) requires a tax_code on every product.
+                # txcd_10000000 = "Services - General" (works for our regulated pet service).
+                "tax_code": "txcd_10000000",
+            },
             "unit_amount": reg_fee_ore,
         },
         "quantity": max(1, len(bird_ids)),
@@ -3369,7 +3380,10 @@ async def _build_bird_checkout_session(
         line_items.append({
             "price_data": {
                 "currency": "sek",
-                "product_data": {"name": "Årsmedlemskap"},
+                "product_data": {
+                    "name": "Årsmedlemskap",
+                    "tax_code": "txcd_10000000",
+                },
                 "unit_amount": mem_fee_ore,
                 "recurring": {"interval": "year"},
             },
@@ -3399,11 +3413,16 @@ async def _build_bird_checkout_session(
         kwargs["customer_email"] = user_email
 
     # Sweden is SMP-eligible → managed payments (Stripe handles tax etc.)
+    # If that fails for ANY managed-payments-specific reason (ineligibility,
+    # missing tax code, etc.), fall back to classic checkout with automatic_tax.
     try:
         session = stripe.checkout.Session.create(**kwargs, managed_payments={"enabled": True})
     except stripe.error.InvalidRequestError as e:
         msg = (getattr(e, "user_message", None) or str(e)).lower()
-        if "managed payments" in msg or "ineligible" in msg:
+        smp_related = any(k in msg for k in (
+            "managed payments", "ineligible", "tax code", "tax_code",
+        ))
+        if smp_related:
             session = stripe.checkout.Session.create(
                 **kwargs,
                 automatic_tax={"enabled": True},

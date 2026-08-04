@@ -77,7 +77,7 @@ export default function Users() {
         } finally {
             setLoading(false);
         }
-    }, [q, role, blocked, bulk]);
+    }, [q, role, blocked]);
     useEffect(() => {
         const t = setTimeout(load, 200);
         return () => clearTimeout(t);

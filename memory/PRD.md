@@ -137,6 +137,12 @@ Continue existing GitHub project `printsout/parrot-register`. Focus: audit the c
 - test@papegojregistret.se / Test123! (user, with 5 sample birds)
 - Seeded discount code: `PARROTS15` (15% off, type=percent)
 
+## Iteration 14 (2026-02): Kritiska produktionsfixar
+- 🔴 **Checkout crashade med 500**: `create_registered_bird` refererade `reg_fee`/`mem_fee` som aldrig deklarerats i det scope där bird-dict byggdes → `NameError`. Fixat genom att hämta `prices = await get_price_settings()` i början av funktionen och använda de admin-konfigurerade värdena i **både** discount-beräkning och DB-record. Discount-flödet använder nu också admin-priserna istället för hårdkodade 300/100.
+- 🔴 **Stripe managed-payments (SMP) failade i Sverige**: SMP kräver `tax_code` på varje `line_items[].product_data`. Lagt till `tax_code: "txcd_10000000"` (Services - General) för både registrering och medlemskap. Fallback-catchen breddad så att den även fångar `"tax code"`/`"tax_code"`-fel och byter till klassisk checkout med `automatic_tax` om det behövs.
+- 🔴 **Admin-rubriker blinkade**: Föregående kodgranskning lade `bulk` som `useCallback`-dep i `Users.jsx` och `RegisteredBirds.jsx`. Men `useBulkSelection` returnerar ett nytt wrapper-object varje render → oändlig re-render loop. Fixat genom att exkludera `bulk` från deps (samma pattern som resten av admin-listorna). Lint är ren.
+- ✅ Verifierat lokalt: `POST /api/registered-birds` → 200 med giltig Stripe checkout-URL. Admin-sidor renderar utan blink.
+
 ## Iteration 13 (2026-02): Kodgranskningsfixar
 - ✅ **XSS-skydd:** `RichTextEditor` i `StyleControls.jsx` sanerar nu allt HTML-innehåll via DOMPurify (ALLOWED_TAGS: b/i/u/em/strong/a/ul/ol/li/p/br/span/div; skript, iframes, on*-handlers blockeras). Både init-load, input och blur går genom sanitizer.
 - ✅ **Shell-injection:** `tests/test_iter20_railway_cleanup.py` använder nu `subprocess.run(['mongosh', ...])` list-form istället för `shell=True`.

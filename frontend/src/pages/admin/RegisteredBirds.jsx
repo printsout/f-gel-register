@@ -99,7 +99,7 @@ export default function RegisteredBirds() {
         } finally {
             setLoading(false);
         }
-    }, [q, status, bulk]);
+    }, [q, status]);
 
     useEffect(() => {
         const t = setTimeout(load, 200);
