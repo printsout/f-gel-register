@@ -3412,24 +3412,17 @@ async def _build_bird_checkout_session(
     if user_email:
         kwargs["customer_email"] = user_email
 
-    # Sweden is SMP-eligible → managed payments (Stripe handles tax etc.)
-    # If that fails for ANY managed-payments-specific reason (ineligibility,
-    # missing tax code, etc.), fall back to classic checkout with automatic_tax.
-    try:
-        session = stripe.checkout.Session.create(**kwargs, managed_payments={"enabled": True})
-    except stripe.error.InvalidRequestError as e:
-        msg = (getattr(e, "user_message", None) or str(e)).lower()
-        smp_related = any(k in msg for k in (
-            "managed payments", "ineligible", "tax code", "tax_code",
-        ))
-        if smp_related:
-            session = stripe.checkout.Session.create(
-                **kwargs,
-                automatic_tax={"enabled": True},
-                billing_address_collection="required",
-            )
-        else:
-            raise
+    # Explicit payment methods so Klarna always shows up (managed_payments auto-mode
+    # requires enabling each method individually in the Stripe Dashboard which is
+    # easy to forget). Klarna supports SEK for BOTH one-time and subscription in
+    # Sweden. Sweden requires BNPL to be shown as opt-in (Stripe does this by
+    # default when card is also listed).
+    session = stripe.checkout.Session.create(
+        **kwargs,
+        payment_method_types=["card", "klarna"],
+        automatic_tax={"enabled": True},
+        billing_address_collection="required",
+    )
 
     amount_total = reg_fee_ore * max(1, len(bird_ids))
     if include_membership:
